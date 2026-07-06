@@ -91,17 +91,17 @@ function M.worktrees(config)
     win = {
       input = {
         keys = {
-          ["<C-d>"] = { "worktree_delete", mode = { "i", "n" } },
+          ["<C-x>"] = { "worktree_delete", mode = { "i", "n" } },
           ["<C-o>"] = { "branch_info", mode = { "i", "n" } },
-          ["<C-v>"] = { "worktree_switch_verbose", mode = { "i", "n" } },
+          ["<A-v>"] = { "worktree_switch_verbose", mode = { "i", "n" } },
           ["<A-n>"] = { "branch_fork", mode = { "i", "n" } },
         },
       },
       list = {
         keys = {
-          ["<C-d>"] = { "worktree_delete", mode = { "n" } },
+          ["<C-x>"] = { "worktree_delete", mode = { "n" } },
           ["<C-o>"] = { "branch_info", mode = { "n" } },
-          ["<C-v>"] = { "worktree_switch_verbose", mode = { "n" } },
+          ["<A-v>"] = { "worktree_switch_verbose", mode = { "n" } },
           ["<A-n>"] = { "branch_fork", mode = { "n" } },
         },
       },
@@ -174,14 +174,14 @@ function M.branches(config)
     win = {
       input = {
         keys = {
-          ["<C-d>"] = { "branch_delete", mode = { "i", "n" } },
+          ["<C-x>"] = { "branch_delete", mode = { "i", "n" } },
           ["<C-o>"] = { "branch_info", mode = { "i", "n" } },
           ["<A-n>"] = { "branch_fork", mode = { "i", "n" } },
         },
       },
       list = {
         keys = {
-          ["<C-d>"] = { "branch_delete", mode = { "n" } },
+          ["<C-x>"] = { "branch_delete", mode = { "n" } },
           ["<C-o>"] = { "branch_info", mode = { "n" } },
           ["<A-n>"] = { "branch_fork", mode = { "n" } },
         },
