@@ -4,11 +4,12 @@ local M = {}
 --- @class GitWorktrees.Config
 M.config = {
   -- How worktree paths are displayed in the picker.
-  -- "tilde"       - $HOME replaced by ~ (default)
-  -- "absolute"    - full absolute path
-  -- "relative"    - relative to the current working directory
-  -- "gitdir"      - git-common-dir prefix + relative path
-  -- "gitdir-tilde"- same as gitdir with $HOME replaced by ~
+  -- "tilde"          - $HOME replaced by ~ (default)
+  -- "absolute"       - full absolute path
+  -- "relative"       - relative to the current working directory
+  -- "relative-gitdir"- relative to the git common directory (e.g. ./wt/my-branch)
+  -- "gitdir"         - git-common-dir prefix + relative path
+  -- "gitdir-tilde"   - same as gitdir with $HOME replaced by ~
   wt_path_display = "tilde",
 
   -- Template for the default new-worktree path in bare repos.

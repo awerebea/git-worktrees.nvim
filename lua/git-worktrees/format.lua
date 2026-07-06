@@ -1,7 +1,51 @@
 local M = {}
 
+-- Compute the path of abs_path relative to base.
+-- Both must be absolute. Returns e.g. "./wt/branch" or "../../other/path".
+local function relative_to(abs_path, base)
+  abs_path = abs_path:gsub("/$", "")
+  base = base:gsub("/$", "")
+
+  local function split(p)
+    local parts = {}
+    for seg in p:gmatch("[^/]+") do
+      parts[#parts + 1] = seg
+    end
+    return parts
+  end
+
+  local tp = split(abs_path)
+  local bp = split(base)
+
+  local common = 0
+  for i = 1, math.min(#tp, #bp) do
+    if tp[i] == bp[i] then
+      common = i
+    else
+      break
+    end
+  end
+
+  local result = {}
+  for _ = common + 1, #bp do
+    result[#result + 1] = ".."
+  end
+  for i = common + 1, #tp do
+    result[#result + 1] = tp[i]
+  end
+
+  if #result == 0 then
+    return "."
+  end
+  local rel = table.concat(result, "/")
+  if result[1] ~= ".." then
+    rel = "./" .. rel
+  end
+  return rel
+end
+
 -- Format an absolute path according to the display mode.
--- mode: "tilde" | "absolute" | "relative" | "gitdir" | "gitdir-tilde"
+-- mode: "tilde" | "absolute" | "relative" | "relative-gitdir" | "gitdir" | "gitdir-tilde"
 function M.format_path(abs_path, mode, git_common_dir)
   if not abs_path or abs_path == "" then
     return ""
@@ -21,6 +65,12 @@ function M.format_path(abs_path, mode, git_common_dir)
   elseif mode == "relative" then
     -- Use Neovim's built-in path shortening: relative to CWD, then tilde
     return vim.fn.fnamemodify(abs_path, ":~:.")
+
+  elseif mode == "relative-gitdir" then
+    if not git_common_dir then
+      return abs_path
+    end
+    return relative_to(abs_path, git_common_dir)
 
   elseif mode == "gitdir" then
     if git_common_dir and abs_path:sub(1, #git_common_dir) == git_common_dir then
