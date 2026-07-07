@@ -66,7 +66,7 @@ end
 
 ---Format an absolute path for display according to the given mode.
 ---@param abs_path string|nil
----@param mode "tilde"|"absolute"|"relative-home"|"relative-wt-base"|"relative-gitdir"|"gitdir"|"gitdir-tilde"
+---@param mode "tilde"|"absolute"|"relative-home"|"relative-wt-base"|"relative-gitdir"|"absolute-gitdir"|"tilde-gitdir"
 ---@param git_common_dir? string Required for relative-gitdir, gitdir, and gitdir-tilde modes.
 ---@param wt_base_path? string Required for relative-wt-base mode; the expanded worktree base directory.
 ---@return string display path, or empty string when abs_path is nil/empty
@@ -101,13 +101,13 @@ function M.format_path(abs_path, mode, git_common_dir, wt_base_path)
     end
     return relative_to(abs_path, git_common_dir)
 
-  elseif mode == "gitdir" then
+  elseif mode == "absolute-gitdir" then
     if git_common_dir and abs_path:sub(1, #git_common_dir) == git_common_dir then
       return git_common_dir .. "/" .. abs_path:sub(#git_common_dir + 2)
     end
     return abs_path
 
-  elseif mode == "gitdir-tilde" then
+  elseif mode == "tilde-gitdir" then
     if git_common_dir and abs_path:sub(1, #git_common_dir) == git_common_dir then
       local gcd = git_common_dir
       if home ~= "" and gcd:sub(1, #home) == home then
