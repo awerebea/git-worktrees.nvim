@@ -93,8 +93,15 @@ end
 
 -- Returns a list of { ref, name, author, date, is_remote }
 -- branch_type: "local" | "remote" | "all"
-function M.get_branches(branch_type, cwd)
+-- opts: { sort_by, date_format, author_format }
+function M.get_branches(branch_type, cwd, opts)
   branch_type = branch_type or "local"
+  opts = opts or {}
+
+  local sort_by = opts.sort_by or "-committerdate"
+  local date_fmt = opts.date_format or "relative"
+  local author_key = (opts.author_format == "email") and "committeremail" or "committername"
+
   local ref_patterns = {}
   if branch_type == "local" or branch_type == "all" then
     table.insert(ref_patterns, "refs/heads")
@@ -105,8 +112,8 @@ function M.get_branches(branch_type, cwd)
 
   -- Use ASCII unit-separator (0x1f) to delimit fields
   local sep = "\x1f"
-  local fmt = "%(refname)" .. sep .. "%(committername)" .. sep .. "%(committerdate:relative)"
-  local args = { "git", "for-each-ref", "--sort=-committerdate", "--format=" .. fmt }
+  local fmt_str = "%(refname)" .. sep .. "%(" .. author_key .. ")" .. sep .. "%(committerdate:" .. date_fmt .. ")"
+  local args = { "git", "for-each-ref", "--sort=" .. sort_by, "--format=" .. fmt_str }
   for _, p in ipairs(ref_patterns) do
     table.insert(args, p)
   end

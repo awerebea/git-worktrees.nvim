@@ -35,11 +35,13 @@ local function relative_to(abs_path, base)
   end
 
   if #result == 0 then
-    return "."
+    return "./"  -- same directory
   end
   local rel = table.concat(result, "/")
   if result[1] ~= ".." then
     rel = "./" .. rel
+  elseif rel == ".." then
+    rel = "../"  -- bare parent ref: trailing slash for clarity
   end
   return rel
 end

@@ -1,8 +1,74 @@
 local M = {}
 
+-- Safe hook invocation. Returns the hook's return value, or nil on error.
+-- Returning false from on_before_switch cancels the operation.
+local function run_hook(name, ...)
+  local config = require("git-worktrees").config
+  local hook = config.hooks and config.hooks[name]
+  if type(hook) ~= "function" then
+    return nil
+  end
+  local ok, result = pcall(hook, ...)
+  if not ok then
+    vim.notify(
+      "git-worktrees: hook '" .. name .. "' error: " .. tostring(result),
+      vim.log.levels.WARN
+    )
+    return nil
+  end
+  return result
+end
+
+-- Open the file equivalent to cur_file in to_path, using config.switch_file_command.
+-- Falls back to a Snacks file picker in to_path when the file does not exist.
+local function swap_current_buffer(from_path, to_path)
+  local config = require("git-worktrees").config
+  if config.swap_current_buffer == false then
+    return
+  end
+
+  local cur_file = vim.api.nvim_buf_get_name(vim.api.nvim_get_current_buf())
+  if cur_file == "" then
+    return
+  end
+
+  local from_norm = from_path:gsub("/$", "")
+  -- Ensure cur_file is actually inside from_path (not just a prefix match)
+  if cur_file ~= from_norm and cur_file:sub(1, #from_norm + 1) ~= from_norm .. "/" then
+    return
+  end
+
+  local rel = cur_file:sub(#from_norm + 2)
+  local new_file = to_path:gsub("/$", "") .. "/" .. rel
+
+  local function do_open()
+    if vim.fn.filereadable(new_file) == 1 then
+      local cmd = config.switch_file_command
+      if cmd then
+        vim.cmd(cmd .. " " .. vim.fn.fnameescape(new_file))
+      end
+    else
+      Snacks.picker.files({ cwd = to_path })
+    end
+  end
+
+  if config.swap_current_buffer == true then
+    do_open()
+  elseif config.swap_current_buffer == "ask" then
+    local choice = vim.fn.confirm(
+      "Open equivalent file in new worktree?\n" .. new_file,
+      "&Yes\n&No",
+      1
+    )
+    if choice == 1 then
+      do_open()
+    end
+  end
+end
+
 -- Switch to an existing worktree or create a new one for the selected branch.
 function M.worktree_switch(picker, item)
-  local snapshot = vim.deepcopy({ -- capture before picker closes
+  local snapshot = vim.deepcopy({
     wt_path = item.wt_path,
     display_path = item.display_path,
     branch = item.branch,
@@ -15,7 +81,7 @@ function M.worktree_switch(picker, item)
   end)
 end
 
--- Same as worktree_switch but always prompts for path even when confirm_path = true.
+-- Same as worktree_switch but always prompts for path even when auto_worktree_path = true.
 function M.worktree_switch_verbose(picker, item)
   local snapshot = vim.deepcopy({
     wt_path = item.wt_path,
@@ -31,11 +97,21 @@ function M.worktree_switch_verbose(picker, item)
 end
 
 function M._do_switch(item, force_prompt)
+  local from_path = vim.fn.getcwd()
+
   if item.wt_path then
-    vim.fn.chdir(item.wt_path)
+    local to_path = item.wt_path
+    local result = run_hook("on_before_switch", from_path, to_path)
+    if result == false then
+      return
+    end
+    vim.fn.chdir(to_path)
     vim.notify("Switched to worktree: " .. item.display_path, vim.log.levels.INFO)
+    run_hook("on_switch", from_path, to_path)
+    swap_current_buffer(from_path, to_path)
     return
   end
+
   -- No worktree yet: create one
   M._create_worktree(item, force_prompt)
 end
@@ -64,7 +140,7 @@ function M._create_worktree(item, force_prompt)
   local branch_safe = item.branch:gsub("/", "-")
 
   local wt_path
-  if config.confirm_path and not force_prompt then
+  if config.auto_worktree_path and not force_prompt then
     wt_path = base_path .. "/" .. branch_safe
   else
     local input = vim.fn.input(
@@ -90,6 +166,12 @@ function M._create_worktree(item, force_prompt)
     branch_name = branch_name:match("[^/]+/(.+)") or branch_name
   end
 
+  local from_path = vim.fn.getcwd()
+  local result = run_hook("on_before_switch", from_path, wt_path)
+  if result == false then
+    return
+  end
+
   local ok, err_or_path = git.worktree_add(wt_path, branch_name, cwd)
   if not ok then
     vim.notify("git-worktrees: " .. (err_or_path or "failed"), vim.log.levels.ERROR)
@@ -102,6 +184,9 @@ function M._create_worktree(item, force_prompt)
     "Created worktree: " .. display .. " for '" .. branch_name .. "'",
     vim.log.levels.INFO
   )
+  run_hook("on_add", branch_name, wt_path)
+  run_hook("on_switch", from_path, wt_path)
+  swap_current_buffer(from_path, wt_path)
 end
 
 -- Delete a worktree, then optionally its branch.
@@ -164,6 +249,7 @@ function M._do_worktree_delete(item)
     end
   end
 
+  run_hook("on_remove", item.branch, item.wt_path)
   vim.notify("Deleted worktree: " .. item.display_path, vim.log.levels.INFO)
 
   if not item.is_remote then

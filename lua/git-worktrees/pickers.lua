@@ -1,5 +1,16 @@
 local M = {}
 
+local BRANCH_TYPES = { "local", "remote", "all" }
+
+local function next_branch_type(current)
+  for i, bt in ipairs(BRANCH_TYPES) do
+    if bt == current then
+      return BRANCH_TYPES[(i % #BRANCH_TYPES) + 1]
+    end
+  end
+  return BRANCH_TYPES[1]
+end
+
 -- Compute column layout based on available window width.
 -- has_path: true for the worktree picker (shows wt path or collapse flag).
 -- Returns visibility flags, column widths, and a uniform column spacer.
@@ -95,7 +106,7 @@ local function load_data(config)
   end
 
   local branch_type = config.branch_type or "local"
-  local branches = git.get_branches(branch_type, cwd)
+  local branches = git.get_branches(branch_type, cwd, config)
   local current_ref = git.get_current_branch(cwd)
 
   return branches, wt_data, current_ref
@@ -104,6 +115,7 @@ end
 -- Worktree total: all branches + their worktrees in a single picker.
 -- Selecting a branch with a worktree switches to it; without one, creates it.
 -- Equivalent to `fgb worktree total`.
+-- config.filter: nil | "no_worktree" | "has_worktree"
 function M.worktrees(config)
   local branches, wt_data, current_ref = load_data(config)
   if not branches then
@@ -115,12 +127,40 @@ function M.worktrees(config)
 
   local items = fmt.build_items(branches, wt_data, config, current_ref)
 
+  -- Apply filter for specialized pickers (Add / Manage)
+  if config.filter == "no_worktree" then
+    local filtered = {}
+    for _, item in ipairs(items) do
+      if not item.wt_path then
+        filtered[#filtered + 1] = item
+      end
+    end
+    items = filtered
+  elseif config.filter == "has_worktree" then
+    local filtered = {}
+    for _, item in ipairs(items) do
+      if item.wt_path then
+        filtered[#filtered + 1] = item
+      end
+    end
+    items = filtered
+  end
+
+  local active_branch_type = config.branch_type or "local"
   local layout = nil
 
+  local title = "Git Worktrees [" .. active_branch_type .. "]"
+  if config.filter == "no_worktree" then
+    title = "Add Worktree [" .. active_branch_type .. "]"
+  elseif config.filter == "has_worktree" then
+    title = "Manage Worktrees [" .. active_branch_type .. "]"
+  end
+
   Snacks.picker.pick({
-    title = "Git Worktrees",
+    title = title,
     items = items,
     layout = { preview = false },
+    pattern = config._initial_pattern,
     format = function(item, picker)
       if not layout then
         local ok, w = pcall(vim.api.nvim_win_get_width, picker.list.win.win)
@@ -185,6 +225,18 @@ function M.worktrees(config)
       branch_fork = function(p, it)
         act.branch_fork(p, it)
       end,
+      cycle_branch_type = function(p, _)
+        local q = (p.input and p.input.filter and p.input.filter.pattern) or ""
+        local next_bt = next_branch_type(active_branch_type)
+        p:close()
+        vim.schedule(function()
+          local new_config = vim.tbl_deep_extend("force", config, {
+            branch_type = next_bt,
+            _initial_pattern = q,
+          })
+          M.worktrees(new_config)
+        end)
+      end,
     },
     confirm = "worktree_switch",
     win = {
@@ -194,6 +246,7 @@ function M.worktrees(config)
           ["<C-o>"] = { "branch_info", mode = { "i", "n" } },
           ["<A-v>"] = { "worktree_switch_verbose", mode = { "i", "n" } },
           ["<A-n>"] = { "branch_fork", mode = { "i", "n" } },
+          ["<C-g>"] = { "cycle_branch_type", mode = { "i", "n" } },
         },
       },
       list = {
@@ -202,6 +255,7 @@ function M.worktrees(config)
           ["<C-o>"] = { "branch_info", mode = { "n" } },
           ["<A-v>"] = { "worktree_switch_verbose", mode = { "n" } },
           ["<A-n>"] = { "branch_fork", mode = { "n" } },
+          ["<C-g>"] = { "cycle_branch_type", mode = { "n" } },
         },
       },
     },
@@ -222,12 +276,14 @@ function M.branches(config)
 
   local items = fmt.build_items(branches, wt_data, config, current_ref)
 
+  local active_branch_type = config.branch_type or "local"
   local layout = nil
 
   Snacks.picker.pick({
-    title = "Git Branches",
+    title = "Git Branches [" .. active_branch_type .. "]",
     items = items,
     layout = { preview = false },
+    pattern = config._initial_pattern,
     format = function(item, picker)
       if not layout then
         local ok, w = pcall(vim.api.nvim_win_get_width, picker.list.win.win)
@@ -276,6 +332,18 @@ function M.branches(config)
       branch_fork = function(p, it)
         act.branch_fork(p, it)
       end,
+      cycle_branch_type = function(p, _)
+        local q = (p.input and p.input.filter and p.input.filter.pattern) or ""
+        local next_bt = next_branch_type(active_branch_type)
+        p:close()
+        vim.schedule(function()
+          local new_config = vim.tbl_deep_extend("force", config, {
+            branch_type = next_bt,
+            _initial_pattern = q,
+          })
+          M.branches(new_config)
+        end)
+      end,
     },
     confirm = "branch_switch",
     win = {
@@ -284,6 +352,7 @@ function M.branches(config)
           ["<C-x>"] = { "branch_delete", mode = { "i", "n" } },
           ["<C-o>"] = { "branch_info", mode = { "i", "n" } },
           ["<A-n>"] = { "branch_fork", mode = { "i", "n" } },
+          ["<C-g>"] = { "cycle_branch_type", mode = { "i", "n" } },
         },
       },
       list = {
@@ -291,6 +360,7 @@ function M.branches(config)
           ["<C-x>"] = { "branch_delete", mode = { "n" } },
           ["<C-o>"] = { "branch_info", mode = { "n" } },
           ["<A-n>"] = { "branch_fork", mode = { "n" } },
+          ["<C-g>"] = { "cycle_branch_type", mode = { "n" } },
         },
       },
     },
