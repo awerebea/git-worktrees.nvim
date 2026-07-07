@@ -31,6 +31,10 @@ Inspired by and built on the shoulders of:
 
 - Neovim >= 0.10
 - [snacks.nvim](https://github.com/folke/snacks.nvim) with the `picker` module enabled
+- `git` available on `$PATH`
+
+[plenary.nvim](https://github.com/nvim-lua/plenary.nvim) is **not** required by the plugin
+itself, but one of the hook examples in this README uses it.
 
 ## Installation
 
@@ -39,6 +43,7 @@ Inspired by and built on the shoulders of:
 ```lua
 {
   "awerebea/git-worktrees.nvim",
+  dependencies = { "folke/snacks.nvim" },
 
   -- Lazy-load: plugin is loaded on first keymap press or command use.
   -- No need for event = "VeryLazy" - keys/cmd already cover both entry points.
