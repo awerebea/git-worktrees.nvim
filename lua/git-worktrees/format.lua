@@ -66,7 +66,7 @@ end
 
 ---Format an absolute path for display according to the given mode.
 ---@param abs_path string|nil
----@param mode "tilde"|"absolute"|"relative-home"|"relative-wt-base"|"relative-gitdir"|"absolute-gitdir"|"tilde-gitdir"
+---@param mode "tilde"|"absolute"|"relative-cwd"|"relative-home"|"relative-wt-base"|"relative-gitdir"|"absolute-gitdir"|"tilde-gitdir"
 ---@param git_common_dir? string Required for relative-gitdir, gitdir, and gitdir-tilde modes.
 ---@param wt_base_path? string Required for relative-wt-base mode; the expanded worktree base directory.
 ---@return string display path, or empty string when abs_path is nil/empty
@@ -85,6 +85,9 @@ function M.format_path(abs_path, mode, git_common_dir, wt_base_path)
       return "~" .. abs_path:sub(#home + 1)
     end
     return abs_path
+
+  elseif mode == "relative-cwd" then
+    return vim.fn.fnamemodify(abs_path, ":.")
 
   elseif mode == "relative-home" then
     return vim.fn.fnamemodify(abs_path, ":~:.")

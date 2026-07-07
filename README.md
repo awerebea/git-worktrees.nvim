@@ -73,7 +73,8 @@ require("git-worktrees").setup({
   -- How worktree paths are displayed in the picker.
   -- "tilde"            - replace $HOME with ~ (default)
   -- "absolute"         - full absolute path
-  -- "relative-home"    - relative to $HOME or cwd (vim fnamemodify :~:.)
+  -- "relative-cwd"     - relative to the current working directory
+  -- "relative-home"    - relative to cwd, with $HOME shown as ~
   -- "relative-wt-base" - relative to the configured worktree base path
   -- "relative-gitdir"  - relative to the git common directory
   -- "absolute-gitdir"  - absolute path prefixed with the git common dir

@@ -5,7 +5,7 @@
 ---@field on_remove? fun(branch: string, path: string) Called after a worktree is removed.
 
 ---@class GitWorktrees.Config
----@field wt_path_display? "tilde"|"absolute"|"relative-home"|"relative-wt-base"|"relative-gitdir"|"absolute-gitdir"|"tilde-gitdir" How worktree paths are displayed in the picker. (default: "tilde")
+---@field wt_path_display? "tilde"|"absolute"|"relative-cwd"|"relative-home"|"relative-wt-base"|"relative-gitdir"|"absolute-gitdir"|"tilde-gitdir" How worktree paths are displayed in the picker. (default: "tilde")
 ---@field wt_base_path_bare? string Base path template for new worktrees in bare repos. Supports {repo_name} and {repo_name_short}. (default: "./wt")
 ---@field wt_base_path_regular? string Base path template for new worktrees in regular repos. (default: "./wt")
 ---@field auto_worktree_path? boolean false: prompt; true: auto-apply <base_path>/<branch_name>. (default: false)
