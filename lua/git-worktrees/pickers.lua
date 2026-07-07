@@ -273,8 +273,8 @@ function M.worktrees(config)
         keys = {
           ["<C-x>"] = { "worktree_delete", mode = { "i", "n" } },
           ["<C-o>"] = { "branch_info", mode = { "i", "n" } },
-          ["<A-v>"] = { "worktree_switch_verbose", mode = { "i", "n" } },
-          ["<A-n>"] = { "worktree_fork", mode = { "i", "n" } },
+          ["<M-v>"] = { "worktree_switch_verbose", mode = { "i", "n" } },
+          ["<M-n>"] = { "worktree_fork", mode = { "i", "n" } },
           ["<M-g>"] = { "cycle_branch_type", mode = { "i", "n" } },
         },
       },
@@ -282,8 +282,8 @@ function M.worktrees(config)
         keys = {
           ["<C-x>"] = { "worktree_delete", mode = { "n" } },
           ["<C-o>"] = { "branch_info", mode = { "n" } },
-          ["<A-v>"] = { "worktree_switch_verbose", mode = { "n" } },
-          ["<A-n>"] = { "worktree_fork", mode = { "n" } },
+          ["<M-v>"] = { "worktree_switch_verbose", mode = { "n" } },
+          ["<M-n>"] = { "worktree_fork", mode = { "n" } },
           ["<M-g>"] = { "cycle_branch_type", mode = { "n" } },
         },
       },
@@ -292,7 +292,7 @@ function M.worktrees(config)
 end
 
 ---Open the branch management picker (equivalent to `fgb branch manage`).
----Selecting a branch runs `git switch`; `<C-x>` deletes, `<A-n>` forks.
+---Selecting a branch runs `git switch`; `<C-x>` deletes, `<M-n>` forks.
 ---@param config GitWorktrees.Config
 function M.branches(config)
   local branches, wt_data, current_ref, wt_base_path = load_data(config)
@@ -380,7 +380,7 @@ function M.branches(config)
         keys = {
           ["<C-x>"] = { "branch_delete", mode = { "i", "n" } },
           ["<C-o>"] = { "branch_info", mode = { "i", "n" } },
-          ["<A-n>"] = { "branch_fork", mode = { "i", "n" } },
+          ["<M-n>"] = { "branch_fork", mode = { "i", "n" } },
           ["<M-g>"] = { "cycle_branch_type", mode = { "i", "n" } },
         },
       },
@@ -388,7 +388,7 @@ function M.branches(config)
         keys = {
           ["<C-x>"] = { "branch_delete", mode = { "n" } },
           ["<C-o>"] = { "branch_info", mode = { "n" } },
-          ["<A-n>"] = { "branch_fork", mode = { "n" } },
+          ["<M-n>"] = { "branch_fork", mode = { "n" } },
           ["<M-g>"] = { "cycle_branch_type", mode = { "n" } },
         },
       },
