@@ -209,7 +209,7 @@ function M.worktrees(config)
       local bo = item.is_remote and "(" or "["
       local bc = item.is_remote and ")" or "]"
       local bhl = item.is_remote and "SnacksPickerSpecial" or "SnacksPickerGitBranch"
-      ret[#ret + 1] = { a(bo .. item.branch .. bc, layout.bw), bhl }
+      ret[#ret + 1] = { a(bo .. item.branch .. bc, layout.bw, { truncate = true }), bhl }
 
       if layout.show_path then
         ret[#ret + 1] = { sp }
@@ -331,7 +331,7 @@ function M.branches(config)
       local bo = item.is_remote and "(" or "["
       local bc = item.is_remote and ")" or "]"
       local bhl = item.is_remote and "SnacksPickerSpecial" or "SnacksPickerGitBranch"
-      ret[#ret + 1] = { a(bo .. item.branch .. bc, layout.bw), bhl }
+      ret[#ret + 1] = { a(bo .. item.branch .. bc, layout.bw, { truncate = true }), bhl }
 
       if layout.show_author then
         ret[#ret + 1] = { sp }
