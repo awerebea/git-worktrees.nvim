@@ -155,21 +155,21 @@ require("git-worktrees").setup({
 
 ## Default Keymaps (registered by setup when disable_default_keymaps = false)
 
-| Key           | Action                                     |
-| ------------- | ------------------------------------------ |
-| `<leader>gwt` | Worktree total (all branches)              |
-| `<leader>gwa` | Add worktree (branches without worktrees)  |
-| `<leader>gwm` | Manage worktrees (branches with worktrees) |
-| `<leader>gbm` | Branch management                          |
+| Key           | Action                                                        |
+| ------------- | ------------------------------------------------------------- |
+| `<leader>gwt` | All branches - switch to or create a worktree                 |
+| `<leader>gwa` | Branches without a worktree - create one                      |
+| `<leader>gwm` | Branches with a worktree - jump between or delete             |
+| `<leader>gbm` | All branches - switch HEAD, delete, or fork (no worktree ops) |
 
 ## User Commands
 
-| Command              | Description                                   |
-| -------------------- | --------------------------------------------- |
-| `:GitWorktreeTotal`  | Worktree total picker                         |
-| `:GitWorktreeAdd`    | Add-worktree picker (no worktree filter)      |
-| `:GitWorktreeManage` | Manage-worktrees picker (has worktree filter) |
-| `:GitBranchManage`   | Branch management picker                      |
+| Command              | Description                                                                                                    |
+| -------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `:GitWorktreeTotal`  | All branches regardless of worktree status. `<CR>` switches to an existing worktree or creates one on the fly. |
+| `:GitWorktreeAdd`    | Only branches that do **not** yet have a worktree. Use this to pick a branch and create a worktree for it.     |
+| `:GitWorktreeManage` | Only branches that **already have** a worktree checked out. Use this to jump between worktrees or delete one.  |
+| `:GitBranchManage`   | All branches for lightweight branch operations: switch HEAD, delete, or fork without touching worktrees.       |
 
 ## In-picker Keybindings
 
