@@ -15,7 +15,7 @@ progressive column collapsing, and keyboard-driven workflow.
 - **Worktree manage** - pre-filtered to branches with worktrees
 - **Branch manage** - switch, delete, or fork any local/remote branch
 - Adaptive column layout (branch | path/flag | author | date) that collapses gracefully on narrow screens
-- Live branch-type cycling (`<C-g>`) between local / remote / all without leaving the picker
+- Live branch-type cycling (`<M-g>`) between local / remote / all without leaving the picker
 - Optional buffer swap when switching worktrees
 - Lifecycle hooks: `on_add`, `on_before_switch`, `on_switch`, `on_remove`
 
@@ -85,7 +85,7 @@ require("git-worktrees").setup({
   --   true  - automatically use <base_path>/<branch_name> without prompting
   auto_worktree_path = false,
 
-  -- Default branch scope. Cycle interactively with <C-g> inside the picker.
+  -- Default branch scope. Cycle interactively with <M-g> inside the picker.
   -- "local" | "remote" | "all"
   branch_type = "local",
 
@@ -163,7 +163,7 @@ require("git-worktrees").setup({
 | `<A-v>` | Force path prompt even when `auto_worktree_path = true`  |
 | `<C-o>` | Show branch info notification                            |
 | `<A-n>` | Fork branch (create new branch from selected)            |
-| `<C-g>` | Cycle branch type: local -> remote -> all -> local       |
+| `<M-g>` | Cycle branch type: local -> remote -> all -> local       |
 
 ## Hook Examples
 

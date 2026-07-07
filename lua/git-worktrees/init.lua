@@ -9,7 +9,7 @@
 ---@field wt_base_path_bare? string Base path template for new worktrees in bare repos. Supports {repo_name} and {repo_name_short}. (default: "./wt")
 ---@field wt_base_path_regular? string Base path template for new worktrees in regular repos. (default: "./wt")
 ---@field auto_worktree_path? boolean false: prompt; true: auto-apply <base_path>/<branch_name>. (default: false)
----@field branch_type? "local"|"remote"|"all" Default branch scope. Cycle with <C-g> inside the picker. (default: "local")
+---@field branch_type? "local"|"remote"|"all" Default branch scope. Cycle with <M-g> inside the picker. (default: "local")
 ---@field sort_by? string Sort order passed to git for-each-ref --sort. (default: "-committerdate")
 ---@field date_format? string committerdate:<format> suffix for the date column. (default: "relative")
 ---@field author_format? "name"|"email" Author column field: "name" -> committername, "email" -> committeremail. (default: "name")
