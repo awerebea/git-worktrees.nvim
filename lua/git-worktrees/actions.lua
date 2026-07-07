@@ -356,6 +356,7 @@ function M.branch_delete(picker, item)
 end
 
 ---Fork the selected branch: prompt for a new name and run `git branch`.
+---Used by the branch management picker where no worktree is involved.
 ---@param picker snacks.Picker
 ---@param item GitWorktrees.Item
 function M.branch_fork(picker, item)
@@ -378,6 +379,40 @@ function M.branch_fork(picker, item)
     else
       vim.notify("git-worktrees: " .. (err or "failed"), vim.log.levels.ERROR)
     end
+  end)
+end
+
+---Fork the selected branch and immediately create + switch to a worktree for it.
+---Used by the worktree pickers where a new branch should also get a worktree.
+---@param picker snacks.Picker
+---@param item GitWorktrees.Item
+function M.worktree_fork(picker, item)
+  local snapshot = vim.deepcopy({ branch = item.branch, ref = item.ref, is_remote = item.is_remote })
+  picker:close()
+  vim.schedule(function()
+    local git = require("git-worktrees.git")
+    local base_name = snapshot.branch
+    if snapshot.is_remote then
+      base_name = base_name:match("[^/]+/(.+)") or base_name
+    end
+    local new_name = vim.fn.input("New branch name: ", base_name .. "_fork")
+    if new_name == "" then
+      vim.notify("git-worktrees: cancelled", vim.log.levels.WARN)
+      return
+    end
+    local ok, err = git.branch_create(new_name, snapshot.branch)
+    if not ok then
+      vim.notify("git-worktrees: " .. (err or "failed"), vim.log.levels.ERROR)
+      return
+    end
+    vim.notify("Created branch: " .. new_name .. " from '" .. snapshot.branch .. "'", vim.log.levels.INFO)
+    M._create_worktree({
+      branch = new_name,
+      ref = "refs/heads/" .. new_name,
+      is_remote = false,
+      wt_path = nil,
+      display_path = "",
+    }, false)
   end)
 end
 

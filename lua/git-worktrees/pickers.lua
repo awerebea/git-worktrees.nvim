@@ -248,8 +248,8 @@ function M.worktrees(config)
       branch_info = function(p, it)
         act.branch_info(p, it)
       end,
-      branch_fork = function(p, it)
-        act.branch_fork(p, it)
+      worktree_fork = function(p, it)
+        act.worktree_fork(p, it)
       end,
       cycle_branch_type = function(p, _)
         local q = (p.input and p.input.filter and p.input.filter.pattern) or ""
@@ -270,7 +270,7 @@ function M.worktrees(config)
           ["<C-x>"] = { "worktree_delete", mode = { "i", "n" } },
           ["<C-o>"] = { "branch_info", mode = { "i", "n" } },
           ["<A-v>"] = { "worktree_switch_verbose", mode = { "i", "n" } },
-          ["<A-n>"] = { "branch_fork", mode = { "i", "n" } },
+          ["<A-n>"] = { "worktree_fork", mode = { "i", "n" } },
           ["<M-g>"] = { "cycle_branch_type", mode = { "i", "n" } },
         },
       },
@@ -279,7 +279,7 @@ function M.worktrees(config)
           ["<C-x>"] = { "worktree_delete", mode = { "n" } },
           ["<C-o>"] = { "branch_info", mode = { "n" } },
           ["<A-v>"] = { "worktree_switch_verbose", mode = { "n" } },
-          ["<A-n>"] = { "branch_fork", mode = { "n" } },
+          ["<A-n>"] = { "worktree_fork", mode = { "n" } },
           ["<M-g>"] = { "cycle_branch_type", mode = { "n" } },
         },
       },

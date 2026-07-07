@@ -156,14 +156,14 @@ require("git-worktrees").setup({
 
 ## In-picker Keybindings
 
-| Key     | Action                                                   |
-| ------- | -------------------------------------------------------- |
-| `<CR>`  | Switch to worktree / branch (create worktree if missing) |
-| `<C-x>` | Delete worktree or branch                                |
-| `<A-v>` | Force path prompt even when `auto_worktree_path = true`  |
-| `<C-o>` | Show branch info notification                            |
-| `<A-n>` | Fork branch (create new branch from selected)            |
-| `<M-g>` | Cycle branch type: local -> remote -> all -> local       |
+| Key     | Action                                                                               |
+| ------- | ------------------------------------------------------------------------------------ |
+| `<CR>`  | Switch to worktree / branch (create worktree if missing)                             |
+| `<C-x>` | Delete worktree or branch                                                            |
+| `<A-v>` | Force path prompt even when `auto_worktree_path = true`                              |
+| `<C-o>` | Show branch info notification                                                        |
+| `<A-n>` | Fork branch (worktree pickers: create branch + worktree; branch picker: branch only) |
+| `<M-g>` | Cycle branch type: local -> remote -> all -> local                                   |
 
 ## Hook Examples
 
