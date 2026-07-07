@@ -66,7 +66,7 @@ end
 
 ---Format an absolute path for display according to the given mode.
 ---@param abs_path string|nil
----@param mode "tilde"|"absolute"|"relative-cwd"|"relative-home"|"relative-wt-base"|"relative-gitdir"|"absolute-gitdir"|"tilde-gitdir"
+---@param mode GitWorktrees.PathDisplay
 ---@param git_common_dir? string Required for relative-gitdir, gitdir, and gitdir-tilde modes.
 ---@param wt_base_path? string Required for relative-wt-base mode; the expanded worktree base directory.
 ---@return string display path, or empty string when abs_path is nil/empty
