@@ -51,11 +51,10 @@ local function compute_layout(items, win_w, has_path)
     if d > dw then dw = d end
   end
 
-  bw = math.min(bw + 2, 60)
+  local indicator_w = 2
+  bw = math.min(bw + 2, win_w - indicator_w)
   pw = math.min(pw + 2, 60)
   aw = math.min(aw, 25)
-
-  local indicator_w = 2
   local show_path = has_path
   local show_flag = false
   local show_author = true
@@ -210,7 +209,7 @@ function M.worktrees(config)
       local bo = item.is_remote and "(" or "["
       local bc = item.is_remote and ")" or "]"
       local bhl = item.is_remote and "SnacksPickerSpecial" or "SnacksPickerGitBranch"
-      ret[#ret + 1] = { a(bo .. item.branch .. bc, layout.bw, { truncate = true }), bhl }
+      ret[#ret + 1] = { a(bo .. item.branch .. bc, layout.bw), bhl }
 
       if layout.show_path then
         ret[#ret + 1] = { sp }
@@ -332,7 +331,7 @@ function M.branches(config)
       local bo = item.is_remote and "(" or "["
       local bc = item.is_remote and ")" or "]"
       local bhl = item.is_remote and "SnacksPickerSpecial" or "SnacksPickerGitBranch"
-      ret[#ret + 1] = { a(bo .. item.branch .. bc, layout.bw, { truncate = true }), bhl }
+      ret[#ret + 1] = { a(bo .. item.branch .. bc, layout.bw), bhl }
 
       if layout.show_author then
         ret[#ret + 1] = { sp }
