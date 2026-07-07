@@ -39,8 +39,6 @@ Inspired by and built on the shoulders of:
 ```lua
 {
   "awerebea/git-worktrees.nvim",
-  -- OR local install:
-  -- dir = "~/Github/git-worktrees.nvim",
 
   -- Lazy-load: plugin is loaded on first keymap press or command use.
   -- No need for event = "VeryLazy" - keys/cmd already cover both entry points.
