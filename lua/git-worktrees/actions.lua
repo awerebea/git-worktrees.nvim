@@ -205,7 +205,7 @@ function M._create_worktree(item, force_prompt)
   end
 
   vim.fn.chdir(wt_path)
-  local display = fmt.format_path(wt_path, config.wt_path_display, wt_data.git_common_dir, base_path)
+  local display = fmt.format_path(wt_path, config.wt_path_display, wt_data.git_common_dir, base_path, wt_data.git_root)
   vim.notify("Created worktree: " .. display .. " for '" .. branch_name .. "'", vim.log.levels.INFO)
   run_hook("on_add", branch_name, wt_path)
   run_hook("on_switch", from_path, wt_path)

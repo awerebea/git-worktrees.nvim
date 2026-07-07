@@ -9,8 +9,9 @@
 ---| "absolute"          # full absolute path
 ---| "relative-cwd"      # relative to the current working directory
 ---| "relative-home"     # relative to cwd, with $HOME shown as ~
+---| "relative-repo"     # relative to the repo working tree (bare: same as relative-gitdir)
 ---| "relative-wt-base"  # relative to the configured worktree base path
----| "relative-gitdir"   # relative to the git common directory
+---| "relative-gitdir"   # relative to the git common directory (.git for non-bare)
 ---| "absolute-gitdir"   # absolute path prefixed with the git common dir
 ---| "tilde-gitdir"      # absolute-gitdir with ~ substitution applied
 

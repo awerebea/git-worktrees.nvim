@@ -67,10 +67,11 @@ end
 ---Format an absolute path for display according to the given mode.
 ---@param abs_path string|nil
 ---@param mode GitWorktrees.PathDisplay
----@param git_common_dir? string Required for relative-gitdir, gitdir, and gitdir-tilde modes.
+---@param git_common_dir? string Required for relative-gitdir, absolute-gitdir, and tilde-gitdir modes.
 ---@param wt_base_path? string Required for relative-wt-base mode; the expanded worktree base directory.
+---@param git_root? string Required for relative-repo mode; the root worktree path (equals git_common_dir for bare repos).
 ---@return string display path, or empty string when abs_path is nil/empty
-function M.format_path(abs_path, mode, git_common_dir, wt_base_path)
+function M.format_path(abs_path, mode, git_common_dir, wt_base_path, git_root)
   if not abs_path or abs_path == "" then
     return ""
   end
@@ -91,6 +92,9 @@ function M.format_path(abs_path, mode, git_common_dir, wt_base_path)
 
   elseif mode == "relative-home" then
     return vim.fn.fnamemodify(abs_path, ":~:.")
+
+  elseif mode == "relative-repo" then
+    return relative_to(abs_path, git_root or git_common_dir or abs_path)
 
   elseif mode == "relative-wt-base" then
     if not wt_base_path then
@@ -144,7 +148,7 @@ function M.build_items(branches, wt_data, config, current_ref, wt_base_path)
   local items = {}
   for _, branch in ipairs(branches) do
     local wt_path = wt_data.wt_map[branch.ref]
-    local display_path = M.format_path(wt_path, config.wt_path_display, wt_data.git_common_dir, wt_base_path)
+    local display_path = M.format_path(wt_path, config.wt_path_display, wt_data.git_common_dir, wt_base_path, wt_data.git_root)
 
     table.insert(items, {
       -- Searchable text includes both branch name and path so both are filterable.
