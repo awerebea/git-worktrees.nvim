@@ -1,7 +1,23 @@
+---@alias GitWorktrees.BranchType "local"|"remote"|"all"
+
+---@class GitWorktrees.Layout
+---@field bw integer Branch column display width (includes 2-char padding).
+---@field pw integer Path column display width (includes 2-char padding).
+---@field aw integer Author column display width (capped at 25).
+---@field spacer integer Uniform inter-column gap in spaces (1-4).
+---@field show_path boolean Show the full worktree path column.
+---@field show_flag boolean Show a single-char worktree presence indicator instead of path.
+---@field show_author boolean Show the author column.
+---@field show_date boolean Show the date column.
+
 local M = {}
 
+---@type GitWorktrees.BranchType[]
 local BRANCH_TYPES = { "local", "remote", "all" }
 
+---Return the next branch type in the local -> remote -> all -> local cycle.
+---@param current GitWorktrees.BranchType
+---@return GitWorktrees.BranchType
 local function next_branch_type(current)
   for i, bt in ipairs(BRANCH_TYPES) do
     if bt == current then
@@ -11,11 +27,13 @@ local function next_branch_type(current)
   return BRANCH_TYPES[1]
 end
 
--- Compute column layout based on available window width.
--- has_path: true for the worktree picker (shows wt path or collapse flag).
--- Returns visibility flags, column widths, and a uniform column spacer.
+---Compute adaptive column visibility and spacer from the item set and available width.
+---Columns are hidden in fgb order: path (replaced by flag) -> author -> date.
+---@param items GitWorktrees.Item[]
+---@param win_w integer Available list-window width in columns.
+---@param has_path boolean True for the worktree picker; false for the branch picker.
+---@return GitWorktrees.Layout
 local function compute_layout(items, win_w, has_path)
-  -- Minimum widths matching fgb's column headers
   local bw, pw, aw, dw = 6, 2, 6, 4
 
   for _, item in ipairs(items) do
@@ -43,8 +61,7 @@ local function compute_layout(items, win_w, has_path)
   local show_author = true
   local show_date = true
 
-  -- Progressive collapse: path -> author -> date (fgb order).
-  -- +5 overhead matches fgb's spacer baseline.
+  -- +5 overhead matches fgb's spacer baseline calculation.
   local total = indicator_w + bw + (has_path and pw or 0) + aw + dw + 5
 
   if has_path and total > win_w then
@@ -71,7 +88,7 @@ local function compute_layout(items, win_w, has_path)
   if show_author then n_gaps = n_gaps + 1 end
   if show_date then n_gaps = n_gaps + 1 end
 
-  -- Distribute remaining space as uniform inter-column gaps, capped at 4 like fgb.
+  -- Distribute remaining width as a uniform inter-column gap, capped at 4 (fgb behaviour).
   local spacer = 2
   if n_gaps > 0 then
     spacer = math.floor((win_w - used_w) / n_gaps)
@@ -90,6 +107,11 @@ local function compute_layout(items, win_w, has_path)
   }
 end
 
+---Load branches, worktree data and the current HEAD ref for the given config.
+---@param config GitWorktrees.Config
+---@return GitWorktrees.Branch[]|nil branches
+---@return GitWorktrees.WorktreeData|nil wt_data
+---@return string|nil current_ref
 local function load_data(config)
   local git = require("git-worktrees.git")
   local cwd = vim.fn.getcwd()
@@ -112,10 +134,14 @@ local function load_data(config)
   return branches, wt_data, current_ref
 end
 
--- Worktree total: all branches + their worktrees in a single picker.
--- Selecting a branch with a worktree switches to it; without one, creates it.
--- Equivalent to `fgb worktree total`.
--- config.filter: nil | "no_worktree" | "has_worktree"
+---Open the worktree total picker (equivalent to `fgb worktree total`).
+---Selecting a branch with a worktree switches to it; without one, creates it.
+---
+---`config.filter` controls pre-filtering:
+--- - `nil` - all branches (default)
+--- - `"no_worktree"` - branches without a checked-out worktree (:GitWorktreeAdd)
+--- - `"has_worktree"` - branches with a checked-out worktree (:GitWorktreeManage)
+---@param config GitWorktrees.Config
 function M.worktrees(config)
   local branches, wt_data, current_ref = load_data(config)
   if not branches then
@@ -127,8 +153,8 @@ function M.worktrees(config)
 
   local items = fmt.build_items(branches, wt_data, config, current_ref)
 
-  -- Apply filter for specialized pickers (Add / Manage)
   if config.filter == "no_worktree" then
+    ---@type GitWorktrees.Item[]
     local filtered = {}
     for _, item in ipairs(items) do
       if not item.wt_path then
@@ -137,6 +163,7 @@ function M.worktrees(config)
     end
     items = filtered
   elseif config.filter == "has_worktree" then
+    ---@type GitWorktrees.Item[]
     local filtered = {}
     for _, item in ipairs(items) do
       if item.wt_path then
@@ -146,7 +173,8 @@ function M.worktrees(config)
     items = filtered
   end
 
-  local active_branch_type = config.branch_type or "local"
+  local active_branch_type = config.branch_type or "local" --[[@as GitWorktrees.BranchType]]
+  ---@type GitWorktrees.Layout|nil
   local layout = nil
 
   local title = "Git Worktrees [" .. active_branch_type .. "]"
@@ -170,6 +198,7 @@ function M.worktrees(config)
 
       local a = Snacks.picker.util.align
       local sp = string.rep(" ", layout.spacer)
+      ---@type snacks.picker.Highlight[]
       local ret = {}
 
       if item.is_current then
@@ -180,9 +209,8 @@ function M.worktrees(config)
 
       local bo = item.is_remote and "(" or "["
       local bc = item.is_remote and ")" or "]"
-      local bd = bo .. item.branch .. bc
       local bhl = item.is_remote and "SnacksPickerSpecial" or "SnacksPickerGitBranch"
-      ret[#ret + 1] = { a(bd, layout.bw), bhl }
+      ret[#ret + 1] = { a(bo .. item.branch .. bc, layout.bw), bhl }
 
       if layout.show_path then
         ret[#ret + 1] = { sp }
@@ -193,8 +221,7 @@ function M.worktrees(config)
         end
       elseif layout.show_flag then
         ret[#ret + 1] = { sp }
-        local flag = item.wt_path and "+" or " "
-        ret[#ret + 1] = { flag, item.wt_path and "SnacksPickerDir" or nil }
+        ret[#ret + 1] = { item.wt_path and "+" or " ", item.wt_path and "SnacksPickerDir" or nil }
       end
 
       if layout.show_author then
@@ -230,11 +257,10 @@ function M.worktrees(config)
         local next_bt = next_branch_type(active_branch_type)
         p:close()
         vim.schedule(function()
-          local new_config = vim.tbl_deep_extend("force", config, {
+          M.worktrees(vim.tbl_deep_extend("force", config, {
             branch_type = next_bt,
             _initial_pattern = q,
-          })
-          M.worktrees(new_config)
+          }))
         end)
       end,
     },
@@ -262,9 +288,9 @@ function M.worktrees(config)
   })
 end
 
--- Branch manager: all branches.
--- Selecting a branch runs `git switch`; extra bindings for delete and fork.
--- Equivalent to `fgb branch manage`.
+---Open the branch management picker (equivalent to `fgb branch manage`).
+---Selecting a branch runs `git switch`; `<C-x>` deletes, `<A-n>` forks.
+---@param config GitWorktrees.Config
 function M.branches(config)
   local branches, wt_data, current_ref = load_data(config)
   if not branches then
@@ -276,7 +302,8 @@ function M.branches(config)
 
   local items = fmt.build_items(branches, wt_data, config, current_ref)
 
-  local active_branch_type = config.branch_type or "local"
+  local active_branch_type = config.branch_type or "local" --[[@as GitWorktrees.BranchType]]
+  ---@type GitWorktrees.Layout|nil
   local layout = nil
 
   Snacks.picker.pick({
@@ -293,6 +320,7 @@ function M.branches(config)
 
       local a = Snacks.picker.util.align
       local sp = string.rep(" ", layout.spacer)
+      ---@type snacks.picker.Highlight[]
       local ret = {}
 
       if item.is_current then
@@ -303,9 +331,8 @@ function M.branches(config)
 
       local bo = item.is_remote and "(" or "["
       local bc = item.is_remote and ")" or "]"
-      local bd = bo .. item.branch .. bc
       local bhl = item.is_remote and "SnacksPickerSpecial" or "SnacksPickerGitBranch"
-      ret[#ret + 1] = { a(bd, layout.bw), bhl }
+      ret[#ret + 1] = { a(bo .. item.branch .. bc, layout.bw), bhl }
 
       if layout.show_author then
         ret[#ret + 1] = { sp }
@@ -337,11 +364,10 @@ function M.branches(config)
         local next_bt = next_branch_type(active_branch_type)
         p:close()
         vim.schedule(function()
-          local new_config = vim.tbl_deep_extend("force", config, {
+          M.branches(vim.tbl_deep_extend("force", config, {
             branch_type = next_bt,
             _initial_pattern = q,
-          })
-          M.branches(new_config)
+          }))
         end)
       end,
     },

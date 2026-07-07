@@ -1,7 +1,19 @@
+---@class GitWorktrees.Snapshot
+---@field wt_path string|nil
+---@field display_path string
+---@field branch string
+---@field ref string
+---@field is_remote boolean
+---@field is_current? boolean
+
 local M = {}
 
--- Safe hook invocation. Returns the hook's return value, or nil on error.
--- Returning false from on_before_switch cancels the operation.
+---Invoke a lifecycle hook by name, forwarding all extra arguments.
+---Returns the hook's return value so callers can react (e.g. on_before_switch
+---returning false aborts the operation).
+---@param name "on_add"|"on_before_switch"|"on_switch"|"on_remove"
+---@param ... any Arguments forwarded to the hook function.
+---@return any
 local function run_hook(name, ...)
   local config = require("git-worktrees").config
   local hook = config.hooks and config.hooks[name]
@@ -19,8 +31,11 @@ local function run_hook(name, ...)
   return result
 end
 
--- Open the file equivalent to cur_file in to_path, using config.switch_file_command.
--- Falls back to a Snacks file picker in to_path when the file does not exist.
+---Open the file in `to_path` that corresponds to the currently open buffer in
+---`from_path`, respecting the `swap_current_buffer` and `switch_file_command`
+---config options. Falls back to a Snacks file picker when the file is absent.
+---@param from_path string Absolute path of the old worktree root.
+---@param to_path string Absolute path of the new worktree root.
 local function swap_current_buffer(from_path, to_path)
   local config = require("git-worktrees").config
   if config.swap_current_buffer == false then
@@ -33,7 +48,7 @@ local function swap_current_buffer(from_path, to_path)
   end
 
   local from_norm = from_path:gsub("/$", "")
-  -- Ensure cur_file is actually inside from_path (not just a prefix match)
+  -- Guard against prefix-only matches (e.g. "/repo" must not match "/repo_other/...").
   if cur_file ~= from_norm and cur_file:sub(1, #from_norm + 1) ~= from_norm .. "/" then
     return
   end
@@ -66,8 +81,11 @@ local function swap_current_buffer(from_path, to_path)
   end
 end
 
--- Switch to an existing worktree or create a new one for the selected branch.
+---Switch to an existing worktree or create a new one for the selected branch.
+---@param picker snacks.Picker
+---@param item GitWorktrees.Item
 function M.worktree_switch(picker, item)
+  ---@type GitWorktrees.Snapshot
   local snapshot = vim.deepcopy({
     wt_path = item.wt_path,
     display_path = item.display_path,
@@ -81,8 +99,12 @@ function M.worktree_switch(picker, item)
   end)
 end
 
--- Same as worktree_switch but always prompts for path even when auto_worktree_path = true.
+---Like `worktree_switch` but always prompts for the path regardless of
+---`auto_worktree_path`.
+---@param picker snacks.Picker
+---@param item GitWorktrees.Item
 function M.worktree_switch_verbose(picker, item)
+  ---@type GitWorktrees.Snapshot
   local snapshot = vim.deepcopy({
     wt_path = item.wt_path,
     display_path = item.display_path,
@@ -96,13 +118,16 @@ function M.worktree_switch_verbose(picker, item)
   end)
 end
 
+---Core switch implementation. If the item already has a worktree, cds into it.
+---Otherwise delegates to `_create_worktree`.
+---@param item GitWorktrees.Snapshot
+---@param force_prompt boolean Always prompt for worktree path when true.
 function M._do_switch(item, force_prompt)
   local from_path = vim.fn.getcwd()
 
   if item.wt_path then
     local to_path = item.wt_path
-    local result = run_hook("on_before_switch", from_path, to_path)
-    if result == false then
+    if run_hook("on_before_switch", from_path, to_path) == false then
       return
     end
     vim.fn.chdir(to_path)
@@ -112,10 +137,12 @@ function M._do_switch(item, force_prompt)
     return
   end
 
-  -- No worktree yet: create one
   M._create_worktree(item, force_prompt)
 end
 
+---Prompt for (or derive) a worktree path, run `git worktree add`, then switch.
+---@param item GitWorktrees.Snapshot
+---@param force_prompt boolean
 function M._create_worktree(item, force_prompt)
   local git = require("git-worktrees.git")
   local config = require("git-worktrees").config
@@ -130,13 +157,13 @@ function M._create_worktree(item, force_prompt)
 
   local tmpl = wt_data.is_bare and config.wt_base_path_bare or config.wt_base_path_regular
   local base_path = git.expand_wt_base(tmpl, wt_data.git_common_dir)
-  local home = vim.env.HOME or ""
-  local display_base = base_path
-  if home ~= "" and display_base:sub(1, #home) == home then
-    display_base = "~" .. display_base:sub(#home + 1)
-  end
 
-  -- safe subdir name: replace slashes
+  local home = vim.env.HOME or ""
+  local display_base = (home ~= "" and base_path:sub(1, #home) == home)
+    and "~" .. base_path:sub(#home + 1)
+    or base_path
+
+  -- Replace slashes in the branch name so it is safe as a directory component.
   local branch_safe = item.branch:gsub("/", "-")
 
   local wt_path
@@ -160,37 +187,36 @@ function M._create_worktree(item, force_prompt)
     end
   end
 
-  -- For remote branches, use the short local name
+  -- Remote branch: derive a local name by stripping the remote prefix.
   local branch_name = item.branch
   if item.is_remote then
     branch_name = branch_name:match("[^/]+/(.+)") or branch_name
   end
 
   local from_path = vim.fn.getcwd()
-  local result = run_hook("on_before_switch", from_path, wt_path)
-  if result == false then
+  if run_hook("on_before_switch", from_path, wt_path) == false then
     return
   end
 
-  local ok, err_or_path = git.worktree_add(wt_path, branch_name, cwd)
+  local ok, err = git.worktree_add(wt_path, branch_name, cwd)
   if not ok then
-    vim.notify("git-worktrees: " .. (err_or_path or "failed"), vim.log.levels.ERROR)
+    vim.notify("git-worktrees: " .. (err or "failed"), vim.log.levels.ERROR)
     return
   end
 
   vim.fn.chdir(wt_path)
   local display = fmt.format_path(wt_path, config.wt_path_display, wt_data.git_common_dir)
-  vim.notify(
-    "Created worktree: " .. display .. " for '" .. branch_name .. "'",
-    vim.log.levels.INFO
-  )
+  vim.notify("Created worktree: " .. display .. " for '" .. branch_name .. "'", vim.log.levels.INFO)
   run_hook("on_add", branch_name, wt_path)
   run_hook("on_switch", from_path, wt_path)
   swap_current_buffer(from_path, wt_path)
 end
 
--- Delete a worktree, then optionally its branch.
+---Delete the worktree for the selected branch, then optionally the branch itself.
+---@param picker snacks.Picker
+---@param item GitWorktrees.Item
 function M.worktree_delete(picker, item)
+  ---@type GitWorktrees.Snapshot
   local snapshot = vim.deepcopy({
     wt_path = item.wt_path,
     display_path = item.display_path,
@@ -204,11 +230,11 @@ function M.worktree_delete(picker, item)
   end)
 end
 
+---@param item GitWorktrees.Snapshot
 function M._do_worktree_delete(item)
   local git = require("git-worktrees.git")
 
   if not item.wt_path then
-    -- No worktree: delete the branch directly
     M._do_branch_delete(item)
     return
   end
@@ -264,7 +290,8 @@ function M._do_worktree_delete(item)
   end
 end
 
--- Delete a branch (internal, expects snapshot table with branch, is_remote).
+---Delete a local branch. Remote branch deletion is not yet implemented.
+---@param item GitWorktrees.Snapshot
 function M._do_branch_delete(item)
   local git = require("git-worktrees.git")
   if item.is_remote then
@@ -296,7 +323,9 @@ function M._do_branch_delete(item)
   end
 end
 
--- Switch to a branch (changes HEAD, not CWD).
+---Switch to a branch with `git switch` (changes HEAD in the current worktree).
+---@param picker snacks.Picker
+---@param item GitWorktrees.Item
 function M.branch_switch(picker, item)
   local snapshot = vim.deepcopy({ branch = item.branch, is_remote = item.is_remote })
   picker:close()
@@ -315,7 +344,9 @@ function M.branch_switch(picker, item)
   end)
 end
 
--- Delete a branch (picker action for branch picker).
+---Delete the selected branch from the branch management picker.
+---@param picker snacks.Picker
+---@param item GitWorktrees.Item
 function M.branch_delete(picker, item)
   local snapshot = vim.deepcopy({ branch = item.branch, is_remote = item.is_remote })
   picker:close()
@@ -324,7 +355,9 @@ function M.branch_delete(picker, item)
   end)
 end
 
--- Create a new branch forked from the selected one.
+---Fork the selected branch: prompt for a new name and run `git branch`.
+---@param picker snacks.Picker
+---@param item GitWorktrees.Item
 function M.branch_fork(picker, item)
   local snapshot = vim.deepcopy({ branch = item.branch, ref = item.ref, is_remote = item.is_remote })
   picker:close()
@@ -348,8 +381,10 @@ function M.branch_fork(picker, item)
   end)
 end
 
--- Show branch metadata in a notification.
-function M.branch_info(picker, item)
+---Show branch metadata as a vim.notify without closing the picker.
+---@param picker snacks.Picker
+---@param item GitWorktrees.Item
+function M.branch_info(picker, item) --luacheck: ignore picker
   local snapshot = vim.deepcopy({
     branch = item.branch,
     ref = item.ref,
@@ -358,7 +393,6 @@ function M.branch_info(picker, item)
     date = item.date,
     is_current = item.is_current,
   })
-  -- Don't close the picker for info - just show the notification
   local lines = {
     "Branch:   " .. snapshot.branch,
     "Ref:      " .. snapshot.ref,
@@ -367,7 +401,6 @@ function M.branch_info(picker, item)
     "Date:     " .. (snapshot.date or ""),
     snapshot.is_current and "(current)" or "",
   }
-  -- Remove trailing empty lines
   while #lines > 0 and lines[#lines] == "" do
     table.remove(lines)
   end

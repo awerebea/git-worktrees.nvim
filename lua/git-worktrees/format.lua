@@ -1,11 +1,29 @@
+---@class GitWorktrees.Item
+---@field text string Searchable text (branch name and display path concatenated).
+---@field branch string Short branch name shown in the picker.
+---@field ref string Full git ref (e.g. "refs/heads/main").
+---@field wt_path string|nil Absolute path to the checked-out worktree, nil when none.
+---@field display_path string Formatted worktree path for display; empty string when no worktree.
+---@field is_remote boolean True for remote-tracking branches.
+---@field is_current boolean True when this branch is the current HEAD.
+---@field author string Committer name or email.
+---@field date string Formatted committer date.
+
 local M = {}
 
--- Compute the path of abs_path relative to base.
--- Both must be absolute. Returns e.g. "./wt/branch" or "../../other/path".
+---Compute the path of `abs_path` relative to `base`.
+---Both arguments must be absolute paths.
+---Returns paths with a "./" prefix (e.g. "./wt/branch") or ".." segments.
+---Bare "." is returned as "./" and bare ".." as "../" for visual clarity.
+---@param abs_path string
+---@param base string
+---@return string
 local function relative_to(abs_path, base)
   abs_path = abs_path:gsub("/$", "")
   base = base:gsub("/$", "")
 
+  ---@param p string
+  ---@return string[]
   local function split(p)
     local parts = {}
     for seg in p:gmatch("[^/]+") do
@@ -35,19 +53,22 @@ local function relative_to(abs_path, base)
   end
 
   if #result == 0 then
-    return "./"  -- same directory
+    return "./"
   end
   local rel = table.concat(result, "/")
   if result[1] ~= ".." then
     rel = "./" .. rel
   elseif rel == ".." then
-    rel = "../"  -- bare parent ref: trailing slash for clarity
+    rel = "../"
   end
   return rel
 end
 
--- Format an absolute path according to the display mode.
--- mode: "tilde" | "absolute" | "relative" | "relative-gitdir" | "gitdir" | "gitdir-tilde"
+---Format an absolute path for display according to the given mode.
+---@param abs_path string|nil
+---@param mode "tilde"|"absolute"|"relative"|"relative-gitdir"|"gitdir"|"gitdir-tilde"
+---@param git_common_dir? string Required for relative-gitdir, gitdir, and gitdir-tilde modes.
+---@return string display path, or empty string when abs_path is nil/empty
 function M.format_path(abs_path, mode, git_common_dir)
   if not abs_path or abs_path == "" then
     return ""
@@ -65,7 +86,6 @@ function M.format_path(abs_path, mode, git_common_dir)
     return abs_path
 
   elseif mode == "relative" then
-    -- Use Neovim's built-in path shortening: relative to CWD, then tilde
     return vim.fn.fnamemodify(abs_path, ":~:.")
 
   elseif mode == "relative-gitdir" then
@@ -94,23 +114,29 @@ function M.format_path(abs_path, mode, git_common_dir)
     return abs_path
   end
 
-  -- fallback: tilde
+  -- fallback: tilde mode
   if home ~= "" and abs_path:sub(1, #home) == home then
     return "~" .. abs_path:sub(#home + 1)
   end
   return abs_path
 end
 
--- Build picker items combining branches with worktree data.
--- Each item: { text, branch, ref, wt_path, display_path, is_remote, is_current, author, date }
+---Build picker items by joining branch data with worktree data.
+---The returned items are consumed by pickers and actions but never modified.
+---@param branches GitWorktrees.Branch[]
+---@param wt_data GitWorktrees.WorktreeData
+---@param config GitWorktrees.Config
+---@param current_ref string|nil Full ref of the current HEAD branch.
+---@return GitWorktrees.Item[]
 function M.build_items(branches, wt_data, config, current_ref)
+  ---@type GitWorktrees.Item[]
   local items = {}
   for _, branch in ipairs(branches) do
     local wt_path = wt_data.wt_map[branch.ref]
     local display_path = M.format_path(wt_path, config.wt_path_display, wt_data.git_common_dir)
 
     table.insert(items, {
-      -- searchable text: branch name + path so both are filterable
+      -- Searchable text includes both branch name and path so both are filterable.
       text = branch.name .. (display_path ~= "" and ("  " .. display_path) or ""),
       branch = branch.name,
       ref = branch.ref,

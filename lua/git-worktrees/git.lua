@@ -1,5 +1,28 @@
+---@class GitWorktrees.WorktreeData
+---@field git_root string Absolute path to the root worktree.
+---@field git_common_dir string Absolute path to the git common directory (.git or bare root).
+---@field is_bare boolean Whether the repository is a bare repo.
+---@field wt_map table<string, string> Map of full-ref -> absolute worktree path.
+---@field wt_branches string[] List of refs that currently have a checked-out worktree.
+
+---@class GitWorktrees.Branch
+---@field ref string Full ref name (e.g. "refs/heads/main" or "refs/remotes/origin/feat").
+---@field name string Short branch name (e.g. "main" or "origin/feat").
+---@field author string Committer name or email, depending on author_format.
+---@field date string Formatted committer date.
+---@field is_remote boolean True when the ref lives under refs/remotes.
+
+---@class GitWorktrees.GetBranchesOpts
+---@field sort_by? string Sort order for git for-each-ref --sort (default: "-committerdate").
+---@field date_format? string committerdate format suffix (default: "relative").
+---@field author_format? "name"|"email" Which git field to use for the author column (default: "name").
+
 local M = {}
 
+---@param args string[]
+---@param cwd? string
+---@return string|nil output
+---@return string|nil error
 local function run(args, cwd)
   local result = vim.system(args, { text = true, cwd = cwd }):wait()
   if result.code ~= 0 then
@@ -8,13 +31,18 @@ local function run(args, cwd)
   return result.stdout, nil
 end
 
+---Returns true when `cwd` is inside a git repository.
+---@param cwd string
+---@return boolean
 function M.is_git_repo(cwd)
   local result = vim.system({ "git", "rev-parse", "--git-dir" }, { text = true, cwd = cwd }):wait()
   return result.code == 0
 end
 
--- Parse `git worktree list --porcelain` output.
--- Returns: { git_root, git_common_dir, is_bare, wt_map={ref->path}, wt_branches={ref,...} }
+---Parse `git worktree list --porcelain` and return structured worktree data.
+---@param cwd string
+---@return GitWorktrees.WorktreeData|nil data
+---@return string|nil error
 function M.get_worktree_data(cwd)
   local out, err = run({ "git", "worktree", "list", "--porcelain" }, cwd)
   if not out or out == "" then
@@ -23,7 +51,6 @@ function M.get_worktree_data(cwd)
 
   -- Entries are separated by blank lines
   local entries = vim.split(out, "\n\n", { plain = true })
-
   if #entries == 0 then
     return nil, "no worktree entries"
   end
@@ -44,9 +71,13 @@ function M.get_worktree_data(cwd)
 
   local git_common_dir = is_bare and git_root or (git_root .. "/.git")
 
+  ---@type table<string, string>
   local wt_map = {}
+  ---@type string[]
   local wt_branches = {}
 
+  ---@param lines string[]
+  ---@param path string
   local function parse_entry(lines, path)
     local head_hash, ref, is_detached
     for _, line in ipairs(lines) do
@@ -66,7 +97,7 @@ function M.get_worktree_data(cwd)
     end
   end
 
-  -- Regular repos: include the main worktree
+  -- Regular repos include the main worktree; bare repos do not have one.
   if not is_bare then
     parse_entry(first_lines, git_root)
   end
@@ -91,17 +122,18 @@ function M.get_worktree_data(cwd)
   }
 end
 
--- Returns a list of { ref, name, author, date, is_remote }
--- branch_type: "local" | "remote" | "all"
--- opts: { sort_by, date_format, author_format }
+---Return a list of branches sorted by the given sort order.
+---@param branch_type "local"|"remote"|"all"
+---@param cwd string
+---@param opts? GitWorktrees.GetBranchesOpts
+---@return GitWorktrees.Branch[]
 function M.get_branches(branch_type, cwd, opts)
-  branch_type = branch_type or "local"
   opts = opts or {}
-
   local sort_by = opts.sort_by or "-committerdate"
   local date_fmt = opts.date_format or "relative"
   local author_key = (opts.author_format == "email") and "committeremail" or "committername"
 
+  ---@type string[]
   local ref_patterns = {}
   if branch_type == "local" or branch_type == "all" then
     table.insert(ref_patterns, "refs/heads")
@@ -110,7 +142,7 @@ function M.get_branches(branch_type, cwd, opts)
     table.insert(ref_patterns, "refs/remotes")
   end
 
-  -- Use ASCII unit-separator (0x1f) to delimit fields
+  -- Use ASCII unit-separator (0x1f) to delimit fields safely.
   local sep = "\x1f"
   local fmt_str = "%(refname)" .. sep .. "%(" .. author_key .. ")" .. sep .. "%(committerdate:" .. date_fmt .. ")"
   local args = { "git", "for-each-ref", "--sort=" .. sort_by, "--format=" .. fmt_str }
@@ -118,11 +150,12 @@ function M.get_branches(branch_type, cwd, opts)
     table.insert(args, p)
   end
 
-  local out, _ = run(args, cwd)
+  local out = run(args, cwd)
   if not out then
     return {}
   end
 
+  ---@type GitWorktrees.Branch[]
   local branches = {}
   for line in out:gmatch("[^\n]+") do
     local parts = vim.split(line, sep, { plain = true })
@@ -132,17 +165,14 @@ function M.get_branches(branch_type, cwd, opts)
       local date = parts[3] or ""
       local is_remote = ref:sub(1, 12) == "refs/remotes"
       local name = ref:match("^refs/heads/(.+)") or ref:match("^refs/remotes/(.+)")
-      if name then
-        -- Skip remote HEAD pointers
-        if not (is_remote and name:match("/HEAD$")) then
-          table.insert(branches, {
-            ref = ref,
-            name = name,
-            author = author,
-            date = date,
-            is_remote = is_remote,
-          })
-        end
+      if name and not (is_remote and name:match("/HEAD$")) then
+        table.insert(branches, {
+          ref = ref,
+          name = name,
+          author = author,
+          date = date,
+          is_remote = is_remote,
+        })
       end
     end
   end
@@ -150,18 +180,23 @@ function M.get_branches(branch_type, cwd, opts)
   return branches
 end
 
--- Returns the current HEAD ref (e.g. "refs/heads/main") or nil for detached HEAD
+---Return the current HEAD ref (e.g. "refs/heads/main"), or nil for a detached HEAD.
+---@param cwd string
+---@return string|nil
 function M.get_current_branch(cwd)
-  local out, _ = run({ "git", "symbolic-ref", "HEAD" }, cwd)
+  local out = run({ "git", "symbolic-ref", "HEAD" }, cwd)
   if not out then
     return nil
   end
   return out:gsub("%s+$", "")
 end
 
--- Expand a worktree base path template.
--- Supports {repo_name} and {repo_name_short} placeholders.
--- Relative paths are anchored to git_common_dir.
+---Expand a worktree base path template.
+---Supports {repo_name} and {repo_name_short} placeholders.
+---Relative paths are anchored to `git_common_dir`.
+---@param tmpl string
+---@param git_common_dir string
+---@return string
 function M.expand_wt_base(tmpl, git_common_dir)
   local repo_name = vim.fn.fnamemodify(git_common_dir, ":t")
   local repo_name_short = repo_name:gsub("%.git$", "")
@@ -174,8 +209,12 @@ function M.expand_wt_base(tmpl, git_common_dir)
   return path
 end
 
--- Run `git worktree add <path> <branch>` synchronously.
--- Returns true + path on success, false + error on failure.
+---Run `git worktree add <wt_path> <branch_name>`.
+---@param wt_path string Absolute or relative path for the new worktree.
+---@param branch_name string Branch to check out.
+---@param cwd string
+---@return boolean ok
+---@return string|nil error
 function M.worktree_add(wt_path, branch_name, cwd)
   local result = vim.system(
     { "git", "worktree", "add", wt_path, branch_name },
@@ -184,10 +223,14 @@ function M.worktree_add(wt_path, branch_name, cwd)
   if result.code ~= 0 then
     return false, result.stderr or "failed"
   end
-  return true, wt_path
+  return true, nil
 end
 
--- Run `git worktree remove [--force] <path>` synchronously.
+---Run `git worktree remove [--force] <wt_path>`.
+---@param wt_path string
+---@param force boolean
+---@return boolean ok
+---@return string|nil error
 function M.worktree_remove(wt_path, force)
   local args = { "git", "worktree", "remove" }
   if force then
@@ -201,8 +244,12 @@ function M.worktree_remove(wt_path, force)
   return true, nil
 end
 
--- Delete a local branch (-d, then optionally -D on unmerged).
--- Returns true on success, false + error on failure, "unmerged" if branch is not merged.
+---Delete a local branch.
+---Returns `false, "unmerged"` when the branch has unmerged commits and force is false.
+---@param branch_name string
+---@param force boolean Use -D instead of -d.
+---@return boolean ok
+---@return string|nil error
 function M.branch_delete(branch_name, force)
   local flag = force and "-D" or "-d"
   local result = vim.system(
@@ -219,7 +266,11 @@ function M.branch_delete(branch_name, force)
   return true, nil
 end
 
--- Create a new branch from a base branch.
+---Create a new branch from a base ref.
+---@param new_name string
+---@param base string Branch or ref to fork from.
+---@return boolean ok
+---@return string|nil error
 function M.branch_create(new_name, base)
   local result = vim.system(
     { "git", "branch", new_name, base },
@@ -231,7 +282,11 @@ function M.branch_create(new_name, base)
   return true, nil
 end
 
--- Switch to a branch (git switch).
+---Switch to a branch with `git switch`.
+---@param branch_name string
+---@param cwd string
+---@return boolean ok
+---@return string|nil error
 function M.branch_switch(branch_name, cwd)
   local result = vim.system(
     { "git", "switch", branch_name },
