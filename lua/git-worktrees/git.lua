@@ -82,10 +82,16 @@ function M.get_worktree_data(cwd)
     local head_hash, ref, is_detached
     for _, line in ipairs(lines) do
       local h = line:match("^HEAD (.+)")
-      if h then head_hash = h end
+      if h then
+        head_hash = h
+      end
       local b = line:match("^branch (.+)")
-      if b then ref = b end
-      if line == "detached" then is_detached = true end
+      if b then
+        ref = b
+      end
+      if line == "detached" then
+        is_detached = true
+      end
     end
     if ref then
       wt_map[ref] = path
@@ -200,9 +206,7 @@ end
 function M.expand_wt_base(tmpl, git_common_dir)
   local repo_name = vim.fn.fnamemodify(git_common_dir, ":t")
   local repo_name_short = repo_name:gsub("%.git$", "")
-  local path = tmpl
-    :gsub("{repo_name}", repo_name)
-    :gsub("{repo_name_short}", repo_name_short)
+  local path = tmpl:gsub("{repo_name}", repo_name):gsub("{repo_name_short}", repo_name_short)
   if path:sub(1, 1) ~= "/" then
     path = git_common_dir .. "/" .. path:gsub("^%./", "")
   end
@@ -216,10 +220,7 @@ end
 ---@return boolean ok
 ---@return string|nil error
 function M.worktree_add(wt_path, branch_name, cwd)
-  local result = vim.system(
-    { "git", "worktree", "add", wt_path, branch_name },
-    { text = true, cwd = cwd }
-  ):wait()
+  local result = vim.system({ "git", "worktree", "add", wt_path, branch_name }, { text = true, cwd = cwd }):wait()
   if result.code ~= 0 then
     return false, result.stderr or "failed"
   end
@@ -252,10 +253,7 @@ end
 ---@return string|nil error
 function M.branch_delete(branch_name, force)
   local flag = force and "-D" or "-d"
-  local result = vim.system(
-    { "git", "branch", flag, branch_name },
-    { text = true }
-  ):wait()
+  local result = vim.system({ "git", "branch", flag, branch_name }, { text = true }):wait()
   if result.code ~= 0 then
     local err = result.stderr or ""
     if err:find("not fully merged") then
@@ -272,10 +270,7 @@ end
 ---@return boolean ok
 ---@return string|nil error
 function M.branch_create(new_name, base)
-  local result = vim.system(
-    { "git", "branch", new_name, base },
-    { text = true }
-  ):wait()
+  local result = vim.system({ "git", "branch", new_name, base }, { text = true }):wait()
   if result.code ~= 0 then
     return false, result.stderr or "failed"
   end
@@ -288,10 +283,7 @@ end
 ---@return boolean ok
 ---@return string|nil error
 function M.branch_switch(branch_name, cwd)
-  local result = vim.system(
-    { "git", "switch", branch_name },
-    { text = true, cwd = cwd }
-  ):wait()
+  local result = vim.system({ "git", "switch", branch_name }, { text = true, cwd = cwd }):wait()
   if result.code ~= 0 then
     return false, result.stderr or "failed"
   end

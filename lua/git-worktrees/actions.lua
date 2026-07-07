@@ -22,10 +22,7 @@ local function run_hook(name, ...)
   end
   local ok, result = pcall(hook, ...)
   if not ok then
-    vim.notify(
-      "git-worktrees: hook '" .. name .. "' error: " .. tostring(result),
-      vim.log.levels.WARN
-    )
+    vim.notify("git-worktrees: hook '" .. name .. "' error: " .. tostring(result), vim.log.levels.WARN)
     return nil
   end
   return result
@@ -70,11 +67,7 @@ local function swap_current_buffer(from_path, to_path)
   if config.swap_current_buffer == true then
     do_open()
   elseif config.swap_current_buffer == "ask" then
-    local choice = vim.fn.confirm(
-      "Open equivalent file in new worktree?\n" .. new_file,
-      "&Yes\n&No",
-      1
-    )
+    local choice = vim.fn.confirm("Open equivalent file in new worktree?\n" .. new_file, "&Yes\n&No", 1)
     if choice == 1 then
       do_open()
     end
@@ -159,9 +152,7 @@ function M._create_worktree(item, force_prompt)
   local base_path = git.expand_wt_base(tmpl, wt_data.git_common_dir)
 
   local home = vim.env.HOME or ""
-  local display_base = (home ~= "" and base_path:sub(1, #home) == home)
-    and "~" .. base_path:sub(#home + 1)
-    or base_path
+  local display_base = (home ~= "" and base_path:sub(1, #home) == home) and "~" .. base_path:sub(#home + 1) or base_path
 
   -- Replace slashes in the branch name so it is safe as a directory component.
   local branch_safe = item.branch:gsub("/", "-")
@@ -170,10 +161,7 @@ function M._create_worktree(item, force_prompt)
   if config.auto_worktree_path and not force_prompt then
     wt_path = base_path .. "/" .. branch_safe
   else
-    local input = vim.fn.input(
-      "Worktree path (relative to " .. display_base .. " or absolute): ",
-      branch_safe
-    )
+    local input = vim.fn.input("Worktree path (relative to " .. display_base .. " or absolute): ", branch_safe)
     if input == "" then
       vim.notify("git-worktrees: cancelled", vim.log.levels.WARN)
       return
@@ -244,11 +232,8 @@ function M._do_worktree_delete(item)
     return
   end
 
-  local choice = vim.fn.confirm(
-    "Delete worktree: " .. item.display_path .. "\nfor branch '" .. item.branch .. "'?",
-    "&Yes\n&No",
-    2
-  )
+  local choice =
+    vim.fn.confirm("Delete worktree: " .. item.display_path .. "\nfor branch '" .. item.branch .. "'?", "&Yes\n&No", 2)
   if choice ~= 1 then
     return
   end
@@ -279,11 +264,7 @@ function M._do_worktree_delete(item)
   vim.notify("Deleted worktree: " .. item.display_path, vim.log.levels.INFO)
 
   if not item.is_remote then
-    local bc = vim.fn.confirm(
-      "Also delete branch '" .. item.branch .. "'?",
-      "&Yes\n&No",
-      2
-    )
+    local bc = vim.fn.confirm("Also delete branch '" .. item.branch .. "'?", "&Yes\n&No", 2)
     if bc == 1 then
       M._do_branch_delete(item)
     end

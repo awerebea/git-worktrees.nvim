@@ -40,15 +40,23 @@ local function compute_layout(items, win_w, has_path)
     local bo = item.is_remote and "(" or "["
     local bc = item.is_remote and ")" or "]"
     local bd = #(bo .. item.branch .. bc)
-    if bd > bw then bw = bd end
+    if bd > bw then
+      bw = bd
+    end
     if has_path then
       local p = #item.display_path
-      if p > pw then pw = p end
+      if p > pw then
+        pw = p
+      end
     end
     local a = #(item.author or "")
-    if a > aw then aw = a end
+    if a > aw then
+      aw = a
+    end
     local d = #(item.date or "")
-    if d > dw then dw = d end
+    if d > dw then
+      dw = d
+    end
   end
 
   local indicator_w = 2
@@ -77,15 +85,29 @@ local function compute_layout(items, win_w, has_path)
   end
 
   local used_w = indicator_w + bw
-  if show_path then used_w = used_w + pw end
-  if show_flag then used_w = used_w + 1 end
-  if show_author then used_w = used_w + aw end
-  if show_date then used_w = used_w + dw end
+  if show_path then
+    used_w = used_w + pw
+  end
+  if show_flag then
+    used_w = used_w + 1
+  end
+  if show_author then
+    used_w = used_w + aw
+  end
+  if show_date then
+    used_w = used_w + dw
+  end
 
   local n_gaps = 0
-  if show_path or show_flag then n_gaps = n_gaps + 1 end
-  if show_author then n_gaps = n_gaps + 1 end
-  if show_date then n_gaps = n_gaps + 1 end
+  if show_path or show_flag then
+    n_gaps = n_gaps + 1
+  end
+  if show_author then
+    n_gaps = n_gaps + 1
+  end
+  if show_date then
+    n_gaps = n_gaps + 1
+  end
 
   -- Distribute remaining width as a uniform inter-column gap, capped at 4 (fgb behaviour).
   local spacer = 2

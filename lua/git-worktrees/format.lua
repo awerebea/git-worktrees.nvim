@@ -80,40 +80,32 @@ function M.format_path(abs_path, mode, git_common_dir, wt_base_path, git_root)
 
   if mode == "absolute" then
     return abs_path
-
   elseif mode == "tilde" then
     if home ~= "" and abs_path:sub(1, #home) == home then
       return "~" .. abs_path:sub(#home + 1)
     end
     return abs_path
-
   elseif mode == "relative-cwd" then
     return vim.fn.fnamemodify(abs_path, ":.")
-
   elseif mode == "relative-home" then
     return vim.fn.fnamemodify(abs_path, ":~:.")
-
   elseif mode == "relative-repo" then
     return relative_to(abs_path, git_root or git_common_dir or abs_path)
-
   elseif mode == "relative-wt-base" then
     if not wt_base_path then
       return abs_path
     end
     return relative_to(abs_path, wt_base_path)
-
   elseif mode == "relative-gitdir" then
     if not git_common_dir then
       return abs_path
     end
     return relative_to(abs_path, git_common_dir)
-
   elseif mode == "absolute-gitdir" then
     if git_common_dir and abs_path:sub(1, #git_common_dir) == git_common_dir then
       return git_common_dir .. "/" .. abs_path:sub(#git_common_dir + 2)
     end
     return abs_path
-
   elseif mode == "tilde-gitdir" then
     if git_common_dir and abs_path:sub(1, #git_common_dir) == git_common_dir then
       local gcd = git_common_dir
@@ -148,7 +140,8 @@ function M.build_items(branches, wt_data, config, current_ref, wt_base_path)
   local items = {}
   for _, branch in ipairs(branches) do
     local wt_path = wt_data.wt_map[branch.ref]
-    local display_path = M.format_path(wt_path, config.wt_path_display, wt_data.git_common_dir, wt_base_path, wt_data.git_root)
+    local display_path =
+      M.format_path(wt_path, config.wt_path_display, wt_data.git_common_dir, wt_base_path, wt_data.git_root)
 
     table.insert(items, {
       -- Searchable text includes both branch name and path so both are filterable.
