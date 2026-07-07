@@ -2,11 +2,19 @@
 
 A Snacks-picker-based interface for Git worktrees and branch management inside Neovim.
 
-Inspired by [fzf-git-branches](https://github.com/awerebea/fzf-git-branches) - a
-bash/zsh script that provides the same worktree and branch management workflow in the
-terminal via fzf. This plugin brings that functionality natively into Neovim using the
-[Snacks](https://github.com/folke/snacks.nvim) picker, with the same column layout,
-progressive column collapsing, and keyboard-driven workflow.
+Inspired by and built on the shoulders of:
+
+- [fzf-git-branches](https://github.com/awerebea/fzf-git-branches) - a bash/zsh script
+  that provides the same worktree and branch management workflow in the terminal via fzf.
+  This plugin brings that functionality natively into Neovim using the
+  [Snacks](https://github.com/folke/snacks.nvim) picker, with the same column layout,
+  progressive column collapsing, and keyboard-driven workflow.
+- [ThePrimeagen/git-worktree.nvim](https://github.com/ThePrimeagen/git-worktree.nvim) -
+  the original Neovim git worktree plugin that popularised the workflow.
+- [Juksuu/worktrees.nvim](https://github.com/Juksuu/worktrees.nvim) - a modern worktree
+  plugin whose hook system and action patterns influenced this plugin's design.
+- [afonsofrancof/worktrees.nvim](https://github.com/afonsofrancof/worktrees.nvim) - a
+  clean, minimal worktrees implementation that informed several design decisions.
 
 ## Features
 
