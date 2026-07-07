@@ -66,10 +66,11 @@ end
 
 ---Format an absolute path for display according to the given mode.
 ---@param abs_path string|nil
----@param mode "tilde"|"absolute"|"relative"|"relative-gitdir"|"gitdir"|"gitdir-tilde"
+---@param mode "tilde"|"absolute"|"relative-home"|"relative-wt-base"|"relative-gitdir"|"gitdir"|"gitdir-tilde"
 ---@param git_common_dir? string Required for relative-gitdir, gitdir, and gitdir-tilde modes.
+---@param wt_base_path? string Required for relative-wt-base mode; the expanded worktree base directory.
 ---@return string display path, or empty string when abs_path is nil/empty
-function M.format_path(abs_path, mode, git_common_dir)
+function M.format_path(abs_path, mode, git_common_dir, wt_base_path)
   if not abs_path or abs_path == "" then
     return ""
   end
@@ -85,8 +86,14 @@ function M.format_path(abs_path, mode, git_common_dir)
     end
     return abs_path
 
-  elseif mode == "relative" then
+  elseif mode == "relative-home" then
     return vim.fn.fnamemodify(abs_path, ":~:.")
+
+  elseif mode == "relative-wt-base" then
+    if not wt_base_path then
+      return abs_path
+    end
+    return relative_to(abs_path, wt_base_path)
 
   elseif mode == "relative-gitdir" then
     if not git_common_dir then
@@ -127,13 +134,14 @@ end
 ---@param wt_data GitWorktrees.WorktreeData
 ---@param config GitWorktrees.Config
 ---@param current_ref string|nil Full ref of the current HEAD branch.
+---@param wt_base_path? string Expanded worktree base path; required for relative-wt-base display mode.
 ---@return GitWorktrees.Item[]
-function M.build_items(branches, wt_data, config, current_ref)
+function M.build_items(branches, wt_data, config, current_ref, wt_base_path)
   ---@type GitWorktrees.Item[]
   local items = {}
   for _, branch in ipairs(branches) do
     local wt_path = wt_data.wt_map[branch.ref]
-    local display_path = M.format_path(wt_path, config.wt_path_display, wt_data.git_common_dir)
+    local display_path = M.format_path(wt_path, config.wt_path_display, wt_data.git_common_dir, wt_base_path)
 
     table.insert(items, {
       -- Searchable text includes both branch name and path so both are filterable.

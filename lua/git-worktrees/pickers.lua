@@ -106,31 +106,35 @@ local function compute_layout(items, win_w, has_path)
   }
 end
 
----Load branches, worktree data and the current HEAD ref for the given config.
+---Load branches, worktree data, the current HEAD ref, and the expanded worktree base path.
 ---@param config GitWorktrees.Config
 ---@return GitWorktrees.Branch[]|nil branches
 ---@return GitWorktrees.WorktreeData|nil wt_data
 ---@return string|nil current_ref
+---@return string|nil wt_base_path Expanded worktree base path for the current repo type.
 local function load_data(config)
   local git = require("git-worktrees.git")
   local cwd = vim.fn.getcwd()
 
   if not git.is_git_repo(cwd) then
     vim.notify("git-worktrees: not inside a git repository", vim.log.levels.ERROR)
-    return nil, nil, nil
+    return nil, nil, nil, nil
   end
 
   local wt_data, err = git.get_worktree_data(cwd)
   if not wt_data then
     vim.notify("git-worktrees: failed to read worktrees: " .. (err or ""), vim.log.levels.ERROR)
-    return nil, nil, nil
+    return nil, nil, nil, nil
   end
+
+  local tmpl = wt_data.is_bare and (config.wt_base_path_bare or "./wt") or (config.wt_base_path_regular or "./wt")
+  local wt_base_path = git.expand_wt_base(tmpl, wt_data.git_common_dir)
 
   local branch_type = config.branch_type or "local"
   local branches = git.get_branches(branch_type, cwd, config)
   local current_ref = git.get_current_branch(cwd)
 
-  return branches, wt_data, current_ref
+  return branches, wt_data, current_ref, wt_base_path
 end
 
 ---Open the worktree total picker (equivalent to `fgb worktree total`).
@@ -142,7 +146,7 @@ end
 --- - `"has_worktree"` - branches with a checked-out worktree (:GitWorktreeManage)
 ---@param config GitWorktrees.Config
 function M.worktrees(config)
-  local branches, wt_data, current_ref = load_data(config)
+  local branches, wt_data, current_ref, wt_base_path = load_data(config)
   if not branches then
     return
   end
@@ -150,7 +154,7 @@ function M.worktrees(config)
   local fmt = require("git-worktrees.format")
   local act = require("git-worktrees.actions")
 
-  local items = fmt.build_items(branches, wt_data, config, current_ref)
+  local items = fmt.build_items(branches, wt_data, config, current_ref, wt_base_path)
 
   if config.filter == "no_worktree" then
     ---@type GitWorktrees.Item[]
@@ -291,7 +295,7 @@ end
 ---Selecting a branch runs `git switch`; `<C-x>` deletes, `<A-n>` forks.
 ---@param config GitWorktrees.Config
 function M.branches(config)
-  local branches, wt_data, current_ref = load_data(config)
+  local branches, wt_data, current_ref, wt_base_path = load_data(config)
   if not branches then
     return
   end
@@ -299,7 +303,7 @@ function M.branches(config)
   local fmt = require("git-worktrees.format")
   local act = require("git-worktrees.actions")
 
-  local items = fmt.build_items(branches, wt_data, config, current_ref)
+  local items = fmt.build_items(branches, wt_data, config, current_ref, wt_base_path)
 
   local active_branch_type = config.branch_type or "local" --[[@as GitWorktrees.BranchType]]
   ---@type GitWorktrees.Layout|nil

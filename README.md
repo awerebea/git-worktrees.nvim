@@ -71,7 +71,13 @@ All options and their defaults:
 ```lua
 require("git-worktrees").setup({
   -- How worktree paths are displayed in the picker.
-  -- "tilde" | "absolute" | "relative" | "relative-gitdir" | "gitdir" | "gitdir-tilde"
+  -- "tilde"           - replace $HOME with ~ (default)
+  -- "absolute"        - full absolute path
+  -- "relative-home"   - relative to $HOME or cwd (vim fnamemodify :~:.)
+  -- "relative-wt-base"- relative to the configured worktree base path
+  -- "relative-gitdir" - relative to the git common directory
+  -- "gitdir"          - absolute path but prefixed with the git common dir
+  -- "gitdir-tilde"    - gitdir mode with ~ substitution
   wt_path_display = "tilde",
 
   -- Base path template for new worktrees.
