@@ -290,4 +290,58 @@ function M.branch_switch(branch_name, cwd)
   return true, nil
 end
 
+---Delete a branch on a remote via `git push <remote> --delete <branch_name>`.
+---@param remote string Remote name (e.g. "origin").
+---@param branch_name string Branch name without the remote prefix.
+---@param cwd string
+---@return boolean ok
+---@return string|nil error
+function M.branch_delete_remote(remote, branch_name, cwd)
+  local result =
+    vim.system({ "git", "push", remote, "--delete", branch_name }, { text = true, cwd = cwd }):wait()
+  if result.code ~= 0 then
+    return false, result.stderr or "failed"
+  end
+  return true, nil
+end
+
+---Return the upstream tracking short ref for a local branch (e.g. "origin/main"),
+---or nil when the branch has no configured upstream.
+---@param branch_name string Local branch name (without refs/heads/ prefix).
+---@param cwd string
+---@return string|nil upstream e.g. "origin/main", nil if none
+function M.get_branch_upstream(branch_name, cwd)
+  local out = run({ "git", "for-each-ref", "--format=%(upstream:short)", "refs/heads/" .. branch_name }, cwd)
+  if not out then
+    return nil
+  end
+  out = out:gsub("%s+$", "")
+  return out ~= "" and out or nil
+end
+
+---Return true when a local branch with the given name exists.
+---@param branch_name string
+---@param cwd string
+---@return boolean
+function M.local_branch_exists(branch_name, cwd)
+  local out = run({ "git", "branch", "--list", branch_name }, cwd)
+  return out ~= nil and out:match("%S") ~= nil
+end
+
+---Return the short commit hash and subject line for the given ref.
+---@param ref string Full or short ref (e.g. "refs/heads/main", "refs/remotes/origin/feat").
+---@param cwd string
+---@return string|nil hash Short commit hash.
+---@return string|nil subject First line of the commit message.
+function M.get_commit_info(ref, cwd)
+  local sep = "\x1f"
+  local out = run({ "git", "log", "-1", "--format=%h" .. sep .. "%s", ref }, cwd)
+  if not out then
+    return nil, nil
+  end
+  out = out:gsub("%s+$", "")
+  local parts = vim.split(out, sep, { plain = true })
+  return (parts[1] ~= "" and parts[1] or nil), (parts[2] ~= "" and parts[2] or nil)
+end
+
 return M

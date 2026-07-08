@@ -19,9 +19,11 @@ Inspired by and built on the shoulders of:
 ## Features
 
 - **Worktree total** - browse all branches; switch to or create a worktree, delete it, or fork to a new branch + worktree
-- **Worktree add** - pre-filtered to branches without worktrees; create or fork
+- **Worktree add** - pre-filtered to branches without worktrees; create, fork, or delete the selected branch
 - **Worktree manage** - pre-filtered to branches with worktrees; jump between, delete, or fork
-- **Branch manage** - switch, delete, or fork any local/remote branch (no worktree operations)
+- **Branch manage** - switch, delete (local or remote), or fork any local/remote branch (no worktree operations)
+- Simple delete (`<C-x>`): deletes only the selected branch type (local-only or remote-only)
+- Extended delete (`<M-x>`): deletes the selected side first, then prompts to also remove the counterpart
 - Adaptive column layout (branch | path/flag | author | date) that collapses gracefully on narrow screens
 - Live branch-type cycling (`<M-g>`) between local / remote / all without leaving the picker
 - Optional buffer swap when switching worktrees
@@ -169,19 +171,20 @@ require("git-worktrees").setup({
 
 | Command              | Description                                                                                                    |
 | -------------------- | -------------------------------------------------------------------------------------------------------------- |
-| `:GitWorktreeTotal`  | All branches regardless of worktree status. Switch to or create a worktree, delete it, or fork to a new branch + worktree. |
-| `:GitWorktreeAdd`    | Only branches **without** a worktree. Create a worktree for the selected branch, or fork it first.                         |
-| `:GitWorktreeManage` | Only branches **with** a worktree. Jump between worktrees, delete one, or fork to a new branch + worktree.                 |
-| `:GitBranchManage`   | All branches. Switch HEAD, delete, or fork a branch without any worktree operations.                                        |
+| `:GitWorktreeTotal`  | All branches regardless of worktree status. Switch to or create a worktree, delete it (simple or extended), or fork to a new branch + worktree. |
+| `:GitWorktreeAdd`    | Only branches **without** a worktree. Create a worktree, fork the branch, or delete it (simple or extended).                                    |
+| `:GitWorktreeManage` | Only branches **with** a worktree. Jump between worktrees, delete one (simple or extended), or fork to a new branch + worktree.                 |
+| `:GitBranchManage`   | All branches. Switch HEAD, delete (local-only, remote-only, or full local+remote), or fork a branch.                                        |
 
 ## In-picker Keybindings
 
 | Key     | Action                                                                               |
 | ------- | ------------------------------------------------------------------------------------ |
 | `<CR>`  | Switch to worktree / branch (create worktree if missing)                             |
-| `<C-x>` | Delete worktree or branch                                                            |
+| `<C-x>` | Simple delete: local branch -> delete local only; remote branch -> delete remote only |
+| `<M-x>` | Extended delete: local -> delete local then prompt to also delete remote; remote -> delete remote then prompt to also delete local; worktree pickers: remove worktree first |
 | `<M-v>` | Force path prompt even when `auto_worktree_path = true`                              |
-| `<C-o>` | Show branch info notification                                                        |
+| `<C-o>` | Show branch info notification (branch, ref, worktree, author, date, HEAD commit)     |
 | `<M-n>` | Fork branch (worktree pickers: create branch + worktree; branch picker: branch only) |
 | `<M-g>` | Cycle branch type: local -> remote -> all -> local                                   |
 

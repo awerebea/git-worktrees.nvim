@@ -218,6 +218,24 @@ function M.worktree_delete(picker, item)
   end)
 end
 
+---Extended delete: remove worktree (if any) then extended delete the branch.
+---@param picker snacks.Picker
+---@param item GitWorktrees.Item
+function M.worktree_delete_extended(picker, item)
+  ---@type GitWorktrees.Snapshot
+  local snapshot = vim.deepcopy({
+    wt_path = item.wt_path,
+    display_path = item.display_path,
+    branch = item.branch,
+    is_remote = item.is_remote,
+    is_current = item.is_current,
+  })
+  picker:close()
+  vim.schedule(function()
+    M._do_worktree_delete_extended(snapshot)
+  end)
+end
+
 ---@param item GitWorktrees.Snapshot
 function M._do_worktree_delete(item)
   local git = require("git-worktrees.git")
@@ -271,12 +289,80 @@ function M._do_worktree_delete(item)
   end
 end
 
----Delete a local branch. Remote branch deletion is not yet implemented.
+---Extended delete: remove the worktree (if any), then run extended delete on the branch.
+---@param item GitWorktrees.Snapshot
+function M._do_worktree_delete_extended(item)
+  local git = require("git-worktrees.git")
+
+  if item.is_current then
+    vim.notify("git-worktrees: cannot delete the current worktree", vim.log.levels.WARN)
+    return
+  end
+
+  if item.wt_path then
+    local choice = vim.fn.confirm(
+      "Delete worktree: " .. item.display_path .. "\nfor branch '" .. item.branch .. "'?",
+      "&Yes\n&No",
+      2
+    )
+    if choice ~= 1 then
+      return
+    end
+    local ok, err = git.worktree_remove(item.wt_path, false)
+    if not ok then
+      if err and err:find("modified or untracked") then
+        local fc = vim.fn.confirm(
+          "Worktree has uncommitted changes!\nForce delete " .. item.display_path .. "?",
+          "&Force Delete\n&Cancel",
+          2
+        )
+        if fc ~= 1 then
+          return
+        end
+        ok, err = git.worktree_remove(item.wt_path, true)
+        if not ok then
+          vim.notify("git-worktrees: " .. (err or "failed"), vim.log.levels.ERROR)
+          return
+        end
+      else
+        vim.notify("git-worktrees: " .. (err or "failed"), vim.log.levels.ERROR)
+        return
+      end
+    end
+    run_hook("on_delete", item.branch, item.wt_path)
+    vim.notify("Deleted worktree: " .. item.display_path, vim.log.levels.INFO)
+  end
+
+  M._do_branch_delete_extended(item)
+end
+
+---Delete a branch. Remote: `git push <remote> --delete <branch>`. Local: `git branch -d/-D`.
 ---@param item GitWorktrees.Snapshot
 function M._do_branch_delete(item)
   local git = require("git-worktrees.git")
+  local cwd = vim.fn.getcwd()
+
   if item.is_remote then
-    vim.notify("git-worktrees: remote branch deletion is not implemented yet", vim.log.levels.WARN)
+    local remote = item.branch:match("^([^/]+)/")
+    local branch_name = item.branch:match("[^/]+/(.+)")
+    if not remote or not branch_name then
+      vim.notify("git-worktrees: cannot parse remote branch: " .. item.branch, vim.log.levels.ERROR)
+      return
+    end
+    local choice = vim.fn.confirm(
+      "Delete remote branch '" .. branch_name .. "' from '" .. remote .. "'?",
+      "&Yes\n&No",
+      2
+    )
+    if choice ~= 1 then
+      return
+    end
+    local ok, err = git.branch_delete_remote(remote, branch_name, cwd)
+    if ok then
+      vim.notify("Deleted remote branch: " .. item.branch, vim.log.levels.INFO)
+    else
+      vim.notify("git-worktrees: " .. (err or "failed"), vim.log.levels.ERROR)
+    end
     return
   end
 
@@ -301,6 +387,92 @@ function M._do_branch_delete(item)
     end
   else
     vim.notify("Deleted branch: " .. item.branch, vim.log.levels.INFO)
+  end
+end
+
+---Extended delete mirroring fgb ctrl-alt-d behaviour:
+--- - Remote selected: delete remote first, then prompt to delete local counterpart.
+--- - Local selected: delete local first (force fallback for unmerged), then prompt to delete remote.
+---@param item GitWorktrees.Snapshot
+function M._do_branch_delete_extended(item)
+  local git = require("git-worktrees.git")
+  local cwd = vim.fn.getcwd()
+
+  if item.is_remote then
+    local remote = item.branch:match("^([^/]+)/")
+    local branch_name = item.branch:match("[^/]+/(.+)")
+    if not remote or not branch_name then
+      vim.notify("git-worktrees: cannot parse remote branch: " .. item.branch, vim.log.levels.ERROR)
+      return
+    end
+    local choice = vim.fn.confirm(
+      "Delete remote branch '" .. branch_name .. "' from '" .. remote .. "'?",
+      "&Yes\n&No",
+      2
+    )
+    if choice ~= 1 then
+      return
+    end
+    local ok, err = git.branch_delete_remote(remote, branch_name, cwd)
+    if not ok then
+      vim.notify("git-worktrees: " .. (err or "failed"), vim.log.levels.ERROR)
+      return
+    end
+    vim.notify("Deleted remote branch: " .. item.branch, vim.log.levels.INFO)
+    if git.local_branch_exists(branch_name, cwd) then
+      local lc = vim.fn.confirm("Also delete local branch '" .. branch_name .. "'?", "&Yes\n&No", 2)
+      if lc == 1 then
+        M._do_branch_delete({ branch = branch_name, is_remote = false })
+      end
+    end
+    return
+  end
+
+  -- Local branch: delete first (force fallback if unmerged), then offer remote.
+  local ok, err = git.branch_delete(item.branch, false)
+  if not ok then
+    if err == "unmerged" then
+      local fc = vim.fn.confirm(
+        "Branch '" .. item.branch .. "' is not fully merged.\nForce delete?",
+        "&Force Delete\n&Cancel",
+        2
+      )
+      if fc ~= 1 then
+        return
+      end
+      ok, err = git.branch_delete(item.branch, true)
+      if not ok then
+        vim.notify("git-worktrees: " .. (err or "failed"), vim.log.levels.ERROR)
+        return
+      end
+      vim.notify("Force deleted branch: " .. item.branch, vim.log.levels.WARN)
+    else
+      vim.notify("git-worktrees: " .. (err or "failed"), vim.log.levels.ERROR)
+      return
+    end
+  else
+    vim.notify("Deleted branch: " .. item.branch, vim.log.levels.INFO)
+  end
+
+  local upstream = git.get_branch_upstream(item.branch, cwd)
+  if upstream then
+    local remote = upstream:match("^([^/]+)/")
+    local branch_name = upstream:match("[^/]+/(.+)")
+    if remote and branch_name then
+      local rc = vim.fn.confirm(
+        "Also delete remote branch '" .. branch_name .. "' from '" .. remote .. "'?",
+        "&Yes\n&No",
+        2
+      )
+      if rc == 1 then
+        local rok, rerr = git.branch_delete_remote(remote, branch_name, cwd)
+        if rok then
+          vim.notify("Deleted remote branch: " .. upstream, vim.log.levels.INFO)
+        else
+          vim.notify("git-worktrees: " .. (rerr or "failed"), vim.log.levels.ERROR)
+        end
+      end
+    end
   end
 end
 
@@ -333,6 +505,17 @@ function M.branch_delete(picker, item)
   picker:close()
   vim.schedule(function()
     M._do_branch_delete(snapshot)
+  end)
+end
+
+---Extended delete: delete local then offer remote, or delete remote then offer local.
+---@param picker snacks.Picker
+---@param item GitWorktrees.Item
+function M.branch_delete_extended(picker, item)
+  local snapshot = vim.deepcopy({ branch = item.branch, is_remote = item.is_remote })
+  picker:close()
+  vim.schedule(function()
+    M._do_branch_delete_extended(snapshot)
   end)
 end
 
@@ -401,6 +584,7 @@ end
 ---@param picker snacks.Picker
 ---@param item GitWorktrees.Item
 function M.branch_info(picker, item) --luacheck: ignore picker
+  local git = require("git-worktrees.git")
   local snapshot = vim.deepcopy({
     branch = item.branch,
     ref = item.ref,
@@ -409,12 +593,14 @@ function M.branch_info(picker, item) --luacheck: ignore picker
     date = item.date,
     is_current = item.is_current,
   })
+  local hash, subject = git.get_commit_info(snapshot.ref, vim.fn.getcwd())
   local lines = {
     "Branch:   " .. snapshot.branch,
     "Ref:      " .. snapshot.ref,
     "Worktree: " .. (snapshot.display_path ~= "" and snapshot.display_path or "(none)"),
     "Author:   " .. (snapshot.author or ""),
     "Date:     " .. (snapshot.date or ""),
+    hash and ("Commit:   " .. hash .. "  " .. (subject or "")) or "",
     snapshot.is_current and "(current)" or "",
   }
   while #lines > 0 and lines[#lines] == "" do

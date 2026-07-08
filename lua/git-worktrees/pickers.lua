@@ -271,6 +271,9 @@ function M.worktrees(config)
       worktree_delete = function(p, it)
         act.worktree_delete(p, it)
       end,
+      worktree_delete_extended = function(p, it)
+        act.worktree_delete_extended(p, it)
+      end,
       branch_info = function(p, it)
         act.branch_info(p, it)
       end,
@@ -294,6 +297,7 @@ function M.worktrees(config)
       input = {
         keys = {
           ["<C-x>"] = { "worktree_delete", mode = { "i", "n" } },
+          ["<M-x>"] = { "worktree_delete_extended", mode = { "i", "n" } },
           ["<C-o>"] = { "branch_info", mode = { "i", "n" } },
           ["<M-v>"] = { "worktree_switch_verbose", mode = { "i", "n" } },
           ["<M-n>"] = { "worktree_fork", mode = { "i", "n" } },
@@ -303,6 +307,7 @@ function M.worktrees(config)
       list = {
         keys = {
           ["<C-x>"] = { "worktree_delete", mode = { "n" } },
+          ["<M-x>"] = { "worktree_delete_extended", mode = { "n" } },
           ["<C-o>"] = { "branch_info", mode = { "n" } },
           ["<M-v>"] = { "worktree_switch_verbose", mode = { "n" } },
           ["<M-n>"] = { "worktree_fork", mode = { "n" } },
@@ -378,6 +383,9 @@ function M.branches(config)
       branch_delete = function(p, it)
         act.branch_delete(p, it)
       end,
+      branch_delete_extended = function(p, it)
+        act.branch_delete_extended(p, it)
+      end,
       branch_info = function(p, it)
         act.branch_info(p, it)
       end,
@@ -401,6 +409,7 @@ function M.branches(config)
       input = {
         keys = {
           ["<C-x>"] = { "branch_delete", mode = { "i", "n" } },
+          ["<M-x>"] = { "branch_delete_extended", mode = { "i", "n" } },
           ["<C-o>"] = { "branch_info", mode = { "i", "n" } },
           ["<M-n>"] = { "branch_fork", mode = { "i", "n" } },
           ["<M-g>"] = { "cycle_branch_type", mode = { "i", "n" } },
@@ -409,6 +418,7 @@ function M.branches(config)
       list = {
         keys = {
           ["<C-x>"] = { "branch_delete", mode = { "n" } },
+          ["<M-x>"] = { "branch_delete_extended", mode = { "n" } },
           ["<C-o>"] = { "branch_info", mode = { "n" } },
           ["<M-n>"] = { "branch_fork", mode = { "n" } },
           ["<M-g>"] = { "cycle_branch_type", mode = { "n" } },
