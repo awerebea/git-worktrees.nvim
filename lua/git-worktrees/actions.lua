@@ -349,7 +349,7 @@ function M.branch_fork(picker, item)
     if snapshot.is_remote then
       base_name = base_name:match("[^/]+/(.+)") or base_name
     end
-    local new_name = vim.fn.input("New branch name: ", base_name .. "_fork")
+    local new_name = vim.fn.input("New branch name: ", base_name .. "-fork")
     if new_name == "" then
       vim.notify("git-worktrees: cancelled", vim.log.levels.WARN)
       return
@@ -376,7 +376,7 @@ function M.worktree_fork(picker, item)
     if snapshot.is_remote then
       base_name = base_name:match("[^/]+/(.+)") or base_name
     end
-    local new_name = vim.fn.input("New branch name: ", base_name .. "_fork")
+    local new_name = vim.fn.input("New branch name: ", base_name .. "-fork")
     if new_name == "" then
       vim.notify("git-worktrees: cancelled", vim.log.levels.WARN)
       return
