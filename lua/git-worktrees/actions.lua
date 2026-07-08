@@ -207,7 +207,8 @@ function M._create_worktree(item, force_prompt, on_done)
     _finish(base_path .. "/" .. branch_safe)
   else
     local prompt = "Worktree path (relative to " .. display_base .. " or absolute): "
-    vim.ui.input({ prompt = prompt, default = branch_safe }, function(input)
+    local win_width = math.min(vim.api.nvim_strwidth(prompt) + 4, math.floor(vim.o.columns * 0.9))
+    vim.ui.input({ prompt = prompt, default = branch_safe, win = { width = win_width } }, function(input)
       if input == nil or input == "" then
         notify("git-worktrees: cancelled", vim.log.levels.WARN)
         on_done(nil)
