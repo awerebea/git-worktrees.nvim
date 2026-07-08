@@ -18,14 +18,14 @@ Inspired by and built on the shoulders of:
 
 ## Features
 
-- **Worktree total** - browse all branches; switch to existing worktree or create one on the fly
-- **Worktree add** - pre-filtered to branches without worktrees
-- **Worktree manage** - pre-filtered to branches with worktrees
-- **Branch manage** - switch, delete, or fork any local/remote branch
+- **Worktree total** - browse all branches; switch to or create a worktree, delete it, or fork to a new branch + worktree
+- **Worktree add** - pre-filtered to branches without worktrees; create or fork
+- **Worktree manage** - pre-filtered to branches with worktrees; jump between, delete, or fork
+- **Branch manage** - switch, delete, or fork any local/remote branch (no worktree operations)
 - Adaptive column layout (branch | path/flag | author | date) that collapses gracefully on narrow screens
 - Live branch-type cycling (`<M-g>`) between local / remote / all without leaving the picker
 - Optional buffer swap when switching worktrees
-- Lifecycle hooks: `on_add`, `on_before_switch`, `on_switch`, `on_remove`
+- Lifecycle hooks: `before_switch`, `on_switch`, `on_add`, `on_delete`
 
 ## Requirements
 
@@ -141,17 +141,17 @@ require("git-worktrees").setup({
 
   -- Lifecycle hooks. All are optional functions.
   hooks = {
-    -- Called after a new worktree is created.
-    on_add = nil,           -- function(branch: string, path: string)
-
     -- Called before switching worktrees. Return false to abort.
-    on_before_switch = nil, -- function(from: string, to: string): boolean|nil
+    before_switch = nil, -- function(from: string, to: string): boolean|nil
 
     -- Called after the cwd has changed to the new worktree.
-    on_switch = nil,        -- function(from: string, to: string)
+    on_switch = nil,     -- function(from: string, to: string)
 
-    -- Called after a worktree is removed.
-    on_remove = nil,        -- function(branch: string, path: string)
+    -- Called after a new worktree is created.
+    on_add = nil,        -- function(branch: string, path: string)
+
+    -- Called after a worktree is deleted.
+    on_delete = nil,     -- function(branch: string, path: string)
   },
 })
 ```
@@ -169,10 +169,10 @@ require("git-worktrees").setup({
 
 | Command              | Description                                                                                                    |
 | -------------------- | -------------------------------------------------------------------------------------------------------------- |
-| `:GitWorktreeTotal`  | All branches regardless of worktree status. `<CR>` switches to an existing worktree or creates one on the fly. |
-| `:GitWorktreeAdd`    | Only branches that do **not** yet have a worktree. Use this to pick a branch and create a worktree for it.     |
-| `:GitWorktreeManage` | Only branches that **already have** a worktree checked out. Use this to jump between worktrees or delete one.  |
-| `:GitBranchManage`   | All branches for lightweight branch operations: switch HEAD, delete, or fork without touching worktrees.       |
+| `:GitWorktreeTotal`  | All branches regardless of worktree status. Switch to or create a worktree, delete it, or fork to a new branch + worktree. |
+| `:GitWorktreeAdd`    | Only branches **without** a worktree. Create a worktree for the selected branch, or fork it first.                         |
+| `:GitWorktreeManage` | Only branches **with** a worktree. Jump between worktrees, delete one, or fork to a new branch + worktree.                 |
+| `:GitBranchManage`   | All branches. Switch HEAD, delete, or fork a branch without any worktree operations.                                        |
 
 ## In-picker Keybindings
 
@@ -187,21 +187,11 @@ require("git-worktrees").setup({
 
 ## Hook Examples
 
-### Notify on switch
+### Abort switch when path matches a pattern (before_switch)
 
 ```lua
 hooks = {
-  on_switch = function(from, to)
-    vim.notify("Switched: " .. from .. " -> " .. to)
-  end,
-}
-```
-
-### Abort switch when branch has certain prefix
-
-```lua
-hooks = {
-  on_before_switch = function(from, to)
+  before_switch = function(from, to)
     -- Prevent accidentally switching to a WIP worktree
     if to:find("/wip/") then
       vim.notify("Switch aborted: WIP worktrees are protected", vim.log.levels.WARN)
@@ -211,7 +201,17 @@ hooks = {
 }
 ```
 
-### Open a terminal in the new worktree after switching
+### Notify on switch (on_switch)
+
+```lua
+hooks = {
+  on_switch = function(from, to)
+    vim.notify("Switched: " .. from .. " -> " .. to)
+  end,
+}
+```
+
+### Open a terminal in the new worktree after switching (on_switch)
 
 ```lua
 hooks = {
@@ -224,7 +224,7 @@ hooks = {
 }
 ```
 
-### Log all worktree additions
+### Log all worktree additions (on_add)
 
 ```lua
 hooks = {
@@ -238,7 +238,7 @@ hooks = {
 }
 ```
 
-### Switch all open windows to the equivalent file in the new worktree
+### Switch all open windows to the equivalent file in the new worktree (on_switch)
 
 This is the most powerful hook pattern - mirrors every window to the corresponding
 file in the new worktree, closing windows whose files do not exist there.
@@ -277,7 +277,7 @@ require("git-worktrees").setup({
 })
 ```
 
-### Using plenary.path for path operations (from Juksuu/worktrees.nvim example)
+### Using plenary.path for path operations - on_switch (from Juksuu/worktrees.nvim example)
 
 ```lua
 hooks = {

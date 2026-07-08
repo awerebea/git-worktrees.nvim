@@ -1,8 +1,8 @@
 ---@class GitWorktrees.Hooks
----@field on_add? fun(branch: string, path: string) Called after a new worktree is created.
----@field on_before_switch? fun(from: string, to: string): boolean|nil Called before switching worktrees. Return false to abort.
+---@field before_switch? fun(from: string, to: string): boolean|nil Called before switching worktrees. Return false to abort.
 ---@field on_switch? fun(from: string, to: string) Called after the cwd has changed to the new worktree.
----@field on_remove? fun(branch: string, path: string) Called after a worktree is removed.
+---@field on_add? fun(branch: string, path: string) Called after a new worktree is created.
+---@field on_delete? fun(branch: string, path: string) Called after a worktree is deleted.
 
 ---@alias GitWorktrees.PathDisplay
 ---| "tilde"             # replace $HOME with ~ (default)

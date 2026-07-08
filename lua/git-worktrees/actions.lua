@@ -9,9 +9,9 @@
 local M = {}
 
 ---Invoke a lifecycle hook by name, forwarding all extra arguments.
----Returns the hook's return value so callers can react (e.g. on_before_switch
+---Returns the hook's return value so callers can react (e.g. before_switch
 ---returning false aborts the operation).
----@param name "on_add"|"on_before_switch"|"on_switch"|"on_remove"
+---@param name "before_switch"|"on_switch"|"on_add"|"on_delete"
 ---@param ... any Arguments forwarded to the hook function.
 ---@return any
 local function run_hook(name, ...)
@@ -120,7 +120,7 @@ function M._do_switch(item, force_prompt)
 
   if item.wt_path then
     local to_path = item.wt_path
-    if run_hook("on_before_switch", from_path, to_path) == false then
+    if run_hook("before_switch", from_path, to_path) == false then
       return
     end
     vim.fn.chdir(to_path)
@@ -182,7 +182,7 @@ function M._create_worktree(item, force_prompt)
   end
 
   local from_path = vim.fn.getcwd()
-  if run_hook("on_before_switch", from_path, wt_path) == false then
+  if run_hook("before_switch", from_path, wt_path) == false then
     return
   end
 
@@ -260,7 +260,7 @@ function M._do_worktree_delete(item)
     end
   end
 
-  run_hook("on_remove", item.branch, item.wt_path)
+  run_hook("on_delete", item.branch, item.wt_path)
   vim.notify("Deleted worktree: " .. item.display_path, vim.log.levels.INFO)
 
   if not item.is_remote then
