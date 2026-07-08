@@ -142,16 +142,16 @@ function M._do_switch(item, force_prompt)
     return
   end
 
-  M._create_worktree(item, force_prompt)
+  M._create_worktree(item, force_prompt, function() end)
 end
 
 ---Prompt for (or derive) a worktree path, run `git worktree add`, then switch.
----Returns the absolute path of the created worktree on success, nil on any failure or
----cancellation. Callers that fork a branch first must handle the nil case (clean up).
+---Calls on_done with the created worktree path on success, or nil on failure/cancellation.
+---Callers that fork a branch first must handle the nil case in on_done (clean up orphans).
 ---@param item GitWorktrees.Snapshot
 ---@param force_prompt boolean
----@return string|nil wt_path Absolute path of the new worktree, or nil on failure.
-function M._create_worktree(item, force_prompt)
+---@param on_done fun(wt_path: string|nil)
+function M._create_worktree(item, force_prompt, on_done)
   local git = require("git-worktrees.git")
   local config = require("git-worktrees").config
   local fmt = require("git-worktrees.format")
@@ -160,7 +160,8 @@ function M._create_worktree(item, force_prompt)
   local wt_data = git.get_worktree_data(cwd)
   if not wt_data then
     notify("git-worktrees: not a git repo", vim.log.levels.ERROR)
-    return nil
+    on_done(nil)
+    return
   end
 
   local tmpl = wt_data.is_bare and config.wt_base_path_bare or config.wt_base_path_regular
@@ -172,49 +173,57 @@ function M._create_worktree(item, force_prompt)
   -- Replace slashes in the branch name so it is safe as a directory component.
   local branch_safe = item.branch:gsub("/", "-")
 
-  local wt_path
+  local function _finish(wt_path)
+    -- Remote branch: derive a local name by stripping the remote prefix.
+    local branch_name = item.branch
+    if item.is_remote then
+      branch_name = branch_name:match("[^/]+/(.+)") or branch_name
+    end
+
+    local from_path = vim.fn.getcwd()
+    if run_hook("before_switch", from_path, wt_path) == false then
+      on_done(nil)
+      return
+    end
+
+    local ok, err = git.worktree_add(wt_path, branch_name, cwd)
+    if not ok then
+      notify("git-worktrees: " .. (err or "failed"), vim.log.levels.ERROR)
+      on_done(nil)
+      return
+    end
+
+    vim.fn.chdir(wt_path)
+    vim.cmd("redrawstatus!")
+    local display = fmt.format_path(wt_path, config.wt_path_display, wt_data.git_common_dir, base_path, wt_data.git_root)
+    notify("Created worktree: " .. display .. " for '" .. branch_name .. "'", vim.log.levels.INFO)
+    run_hook("on_add", branch_name, wt_path)
+    run_hook("on_switch", from_path, wt_path)
+    swap_current_buffer(from_path, wt_path)
+    on_done(wt_path)
+  end
+
   if config.auto_worktree_path and not force_prompt then
-    wt_path = base_path .. "/" .. branch_safe
+    _finish(base_path .. "/" .. branch_safe)
   else
-    local input = vim.fn.input("Worktree path (relative to " .. display_base .. " or absolute): ", branch_safe)
-    if input == "" then
-      notify("git-worktrees: cancelled", vim.log.levels.WARN)
-      return nil
-    end
-    if input:sub(1, 1) == "/" then
-      wt_path = input
-    elseif input:sub(1, 1) == "~" then
-      wt_path = vim.fn.expand(input)
-    else
-      wt_path = base_path .. "/" .. input
-    end
+    local prompt = "Worktree path (relative to " .. display_base .. " or absolute): "
+    vim.ui.input({ prompt = prompt, default = branch_safe }, function(input)
+      if input == nil or input == "" then
+        notify("git-worktrees: cancelled", vim.log.levels.WARN)
+        on_done(nil)
+        return
+      end
+      local wt_path
+      if input:sub(1, 1) == "/" then
+        wt_path = input
+      elseif input:sub(1, 1) == "~" then
+        wt_path = vim.fn.expand(input)
+      else
+        wt_path = base_path .. "/" .. input
+      end
+      _finish(wt_path)
+    end)
   end
-
-  -- Remote branch: derive a local name by stripping the remote prefix.
-  local branch_name = item.branch
-  if item.is_remote then
-    branch_name = branch_name:match("[^/]+/(.+)") or branch_name
-  end
-
-  local from_path = vim.fn.getcwd()
-  if run_hook("before_switch", from_path, wt_path) == false then
-    return nil
-  end
-
-  local ok, err = git.worktree_add(wt_path, branch_name, cwd)
-  if not ok then
-    notify("git-worktrees: " .. (err or "failed"), vim.log.levels.ERROR)
-    return nil
-  end
-
-  vim.fn.chdir(wt_path)
-  vim.cmd("redrawstatus!")
-  local display = fmt.format_path(wt_path, config.wt_path_display, wt_data.git_common_dir, base_path, wt_data.git_root)
-  notify("Created worktree: " .. display .. " for '" .. branch_name .. "'", vim.log.levels.INFO)
-  run_hook("on_add", branch_name, wt_path)
-  run_hook("on_switch", from_path, wt_path)
-  swap_current_buffer(from_path, wt_path)
-  return wt_path
 end
 
 ---Delete the worktree for the selected branch, then optionally the branch itself.
@@ -592,23 +601,24 @@ function M.branch_fork(picker, item)
     if snapshot.is_remote then
       base_name = base_name:match("[^/]+/(.+)") or base_name
     end
-    local new_name = vim.fn.input("New branch name: ", base_name .. "-fork")
-    if new_name == "" then
-      notify("git-worktrees: cancelled", vim.log.levels.WARN)
-      return
-    end
-    local ok, err = git.branch_create(new_name, snapshot.branch)
-    if not ok then
-      notify("git-worktrees: " .. (err or "failed"), vim.log.levels.ERROR)
-      return
-    end
-    notify("Created branch: " .. new_name .. " from '" .. snapshot.branch .. "'", vim.log.levels.INFO)
-    local sw_ok, sw_err = git.branch_switch(new_name, cwd)
-    if sw_ok then
-      notify("Switched to branch: " .. new_name, vim.log.levels.INFO)
-    else
-      notify("git-worktrees: could not switch to '" .. new_name .. "': " .. (sw_err or "failed"), vim.log.levels.WARN)
-    end
+    vim.ui.input({ prompt = "New branch name: ", default = base_name .. "-fork" }, function(new_name)
+      if new_name == nil or new_name == "" then
+        notify("git-worktrees: cancelled", vim.log.levels.WARN)
+        return
+      end
+      local ok, err = git.branch_create(new_name, snapshot.branch)
+      if not ok then
+        notify("git-worktrees: " .. (err or "failed"), vim.log.levels.ERROR)
+        return
+      end
+      notify("Created branch: " .. new_name .. " from '" .. snapshot.branch .. "'", vim.log.levels.INFO)
+      local sw_ok, sw_err = git.branch_switch(new_name, cwd)
+      if sw_ok then
+        notify("Switched to branch: " .. new_name, vim.log.levels.INFO)
+      else
+        notify("git-worktrees: could not switch to '" .. new_name .. "': " .. (sw_err or "failed"), vim.log.levels.WARN)
+      end
+    end)
   end)
 end
 
@@ -683,77 +693,78 @@ function M.worktree_fork(picker, item)
     if snapshot.is_remote then
       base_name = base_name:match("[^/]+/(.+)") or base_name
     end
-    local new_name = vim.fn.input("New branch name: ", base_name .. "-fork")
-    if new_name == "" then
-      notify("git-worktrees: cancelled", vim.log.levels.WARN)
-      return
-    end
-
-    -- Detect uncommitted changes and offer stash-transfer to the new worktree.
-    local stash_id = nil
-    if git.has_uncommitted_changes(init_wt_path) then
-      local status = git.get_status_short(init_wt_path)
-      local choice = vim.fn.confirm(
-        "Uncommitted changes in current worktree:\n\n"
-          .. status
-          .. "\n\n"
-          .. "Move them to the new worktree '"
-          .. new_name
-          .. "'?",
-        "&Move\n&Leave here\n&Cancel",
-        2
-      )
-      if choice == 3 then
+    vim.ui.input({ prompt = "New branch name: ", default = base_name .. "-fork" }, function(new_name)
+      if new_name == nil or new_name == "" then
         notify("git-worktrees: cancelled", vim.log.levels.WARN)
         return
       end
-      if choice == 1 then
-        local sid, err =
-          git.stash_create("Stash to restore in new worktree for branch '" .. new_name .. "'", init_wt_path)
-        if not sid then
-          notify("git-worktrees: failed to stash changes: " .. (err or "unknown"), vim.log.levels.ERROR)
+
+      -- Detect uncommitted changes and offer stash-transfer to the new worktree.
+      local stash_id = nil
+      if git.has_uncommitted_changes(init_wt_path) then
+        local status = git.get_status_short(init_wt_path)
+        local choice = vim.fn.confirm(
+          "Uncommitted changes in current worktree:\n\n"
+            .. status
+            .. "\n\n"
+            .. "Move them to the new worktree '"
+            .. new_name
+            .. "'?",
+          "&Move\n&Leave here\n&Cancel",
+          2
+        )
+        if choice == 3 then
+          notify("git-worktrees: cancelled", vim.log.levels.WARN)
           return
         end
-        stash_id = sid
+        if choice == 1 then
+          local sid, err =
+            git.stash_create("Stash to restore in new worktree for branch '" .. new_name .. "'", init_wt_path)
+          if not sid then
+            notify("git-worktrees: failed to stash changes: " .. (err or "unknown"), vim.log.levels.ERROR)
+            return
+          end
+          stash_id = sid
+        end
       end
-    end
 
-    -- Create the new branch. On failure, restore any stash and abort.
-    local ok, err = git.branch_create(new_name, snapshot.branch)
-    if not ok then
-      notify("git-worktrees: " .. (err or "failed"), vim.log.levels.ERROR)
-      if stash_id then
-        restore_stash(stash_id, init_wt_path, nil)
+      -- Create the new branch. On failure, restore any stash and abort.
+      local ok, err = git.branch_create(new_name, snapshot.branch)
+      if not ok then
+        notify("git-worktrees: " .. (err or "failed"), vim.log.levels.ERROR)
+        if stash_id then
+          restore_stash(stash_id, init_wt_path, nil)
+        end
+        return
       end
-      return
-    end
-    notify("Created branch: " .. new_name .. " from '" .. snapshot.branch .. "'", vim.log.levels.INFO)
+      notify("Created branch: " .. new_name .. " from '" .. snapshot.branch .. "'", vim.log.levels.INFO)
 
-    -- Create the worktree. On failure, delete the orphaned branch and restore any stash.
-    local new_wt_path = M._create_worktree({
-      branch = new_name,
-      ref = "refs/heads/" .. new_name,
-      is_remote = false,
-      wt_path = nil,
-      display_path = "",
-    }, false)
+      -- Create the worktree. On failure, delete the orphaned branch and restore any stash.
+      M._create_worktree({
+        branch = new_name,
+        ref = "refs/heads/" .. new_name,
+        is_remote = false,
+        wt_path = nil,
+        display_path = "",
+      }, false, function(new_wt_path)
+        if not new_wt_path then
+          git.branch_delete(new_name, true)
+          notify(
+            "git-worktrees: deleted orphaned branch '" .. new_name .. "' (worktree creation aborted).",
+            vim.log.levels.WARN
+          )
+          if stash_id then
+            restore_stash(stash_id, init_wt_path, nil)
+          end
+          return
+        end
 
-    if not new_wt_path then
-      git.branch_delete(new_name, true)
-      notify(
-        "git-worktrees: deleted orphaned branch '" .. new_name .. "' (worktree creation aborted).",
-        vim.log.levels.WARN
-      )
-      if stash_id then
-        restore_stash(stash_id, init_wt_path, nil)
-      end
-      return
-    end
-
-    -- Apply stash to the new worktree (falls back to original on failure).
-    if stash_id then
-      restore_stash(stash_id, init_wt_path, new_wt_path)
-    end
+        -- Apply stash to the new worktree (falls back to original on failure).
+        if stash_id then
+          restore_stash(stash_id, init_wt_path, new_wt_path)
+        end
+      end)
+    end)
   end)
 end
 
