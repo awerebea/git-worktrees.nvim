@@ -746,20 +746,28 @@ function M.branch_info(picker, item) --luacheck: ignore picker
     end
   end
 
-  -- Use a floating window with wrap=true so content is never truncated.
-  -- The window is sized to the longest line (capped at 80% of the editor width)
-  -- and auto-closes after branch_info_timeout ms (0 = stay until dismissed).
+  -- Use a floating window positioned like a Snacks notification (top-right corner).
+  -- zindex 300 places it above the picker (~52) and the Snacks notifier (100).
+  -- wo.wrap=true ensures long lines wrap rather than being truncated.
+  -- auto-closes after branch_info_timeout ms (0 = stay until dismissed).
   local max_line = 0
   for _, line in ipairs(lines) do
     if #line > max_line then max_line = #line end
   end
   local t = config.branch_info_timeout ~= nil and config.branch_info_timeout or 5000
+  local win_width = math.min(max_line + 4, math.floor(vim.o.columns * 0.85))
+  local has_tabline = vim.o.showtabline == 2
+    or (vim.o.showtabline == 1 and vim.fn.tabpagenr("$") > 1)
   local info_win = Snacks.win({
     text = lines,
-    style = "float",
+    relative = "editor",
+    position = "float",
     wo = { wrap = true },
-    width = math.min(max_line + 4, math.floor(vim.o.columns * 0.8)),
-    height = math.min(#lines + 2, math.floor(vim.o.lines * 0.5)),
+    width = win_width,
+    height = math.min(#lines, math.floor(vim.o.lines * 0.5)),
+    row = has_tabline and 1 or 0,
+    col = -1,
+    zindex = 300,
     enter = false,
     border = "rounded",
     noautocmd = true,
