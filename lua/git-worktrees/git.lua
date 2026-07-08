@@ -350,6 +350,14 @@ function M.get_status_short(cwd)
   return out and out:gsub("%s+$", "") or ""
 end
 
+---Return a short status listing including untracked files (used before force-delete).
+---@param cwd string
+---@return string
+function M.get_status_with_untracked(cwd)
+  local out = run({ "git", "status", "--short" }, cwd)
+  return out and out:gsub("%s+$", "") or ""
+end
+
 ---Stash uncommitted changes with a descriptive message. The stash ID is captured
 ---immediately by position to avoid fragile message-based grep lookups (fgb fix).
 ---@param message string

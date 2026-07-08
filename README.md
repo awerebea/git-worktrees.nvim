@@ -149,6 +149,10 @@ require("git-worktrees").setup({
   -- Set to 0 to keep it visible until dismissed.
   branch_info_timeout = 5000,
 
+  -- Timeout in ms for the git-status popup shown before a force-delete confirm.
+  -- 0 (default) keeps it visible until the confirm dialog is answered.
+  status_win_timeout = 0,
+
   -- Lifecycle hooks. All are optional functions.
   hooks = {
     -- Called before switching worktrees. Return false to abort.

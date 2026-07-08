@@ -135,6 +135,7 @@ function M._do_switch(item, force_prompt)
       return
     end
     vim.fn.chdir(to_path)
+    vim.cmd("redrawstatus!")
     notify("Switched to worktree: " .. item.display_path, vim.log.levels.INFO)
     run_hook("on_switch", from_path, to_path)
     swap_current_buffer(from_path, to_path)
@@ -207,6 +208,7 @@ function M._create_worktree(item, force_prompt)
   end
 
   vim.fn.chdir(wt_path)
+  vim.cmd("redrawstatus!")
   local display = fmt.format_path(wt_path, config.wt_path_display, wt_data.git_common_dir, base_path, wt_data.git_root)
   notify("Created worktree: " .. display .. " for '" .. branch_name .. "'", vim.log.levels.INFO)
   run_hook("on_add", branch_name, wt_path)
@@ -251,6 +253,51 @@ function M.worktree_delete_extended(picker, item)
   end)
 end
 
+---Open a top-right floating window showing `git status` for a worktree.
+---Returns the window object so the caller can close it after a confirm prompt.
+---Timeout is controlled by config.status_win_timeout (default 0 = manual close).
+---@param wt_path string Absolute path of the worktree to inspect.
+---@param title string Title shown in the window border.
+---@return snacks.win
+local function show_status_win(wt_path, title)
+  local git = require("git-worktrees.git")
+  local config = require("git-worktrees").config
+  local status = git.get_status_with_untracked(wt_path)
+  local lines = vim.split(status ~= "" and status or "(no changes)", "\n", { plain = true })
+  local max_line = 0
+  for _, line in ipairs(lines) do
+    if #line > max_line then max_line = #line end
+  end
+  local win_width = math.min(math.max(max_line + 4, #title + 6), math.floor(vim.o.columns * 0.85))
+  local has_tabline = vim.o.showtabline == 2
+    or (vim.o.showtabline == 1 and vim.fn.tabpagenr("$") > 1)
+  local t = config.status_win_timeout ~= nil and config.status_win_timeout or 0
+  local win = Snacks.win({
+    text = lines,
+    title = title,
+    title_pos = "left",
+    relative = "editor",
+    position = "float",
+    wo = { wrap = true },
+    width = win_width,
+    height = math.min(#lines + 2, math.floor(vim.o.lines * 0.5)),
+    row = has_tabline and 1 or 0,
+    col = -1,
+    zindex = 300,
+    enter = false,
+    border = "rounded",
+    noautocmd = true,
+    backdrop = false,
+    keys = { q = "close" },
+  })
+  if t > 0 then
+    vim.defer_fn(function()
+      if win:win_valid() then win:close() end
+    end, t)
+  end
+  return win
+end
+
 ---@param item GitWorktrees.Snapshot
 function M._do_worktree_delete(item)
   local git = require("git-worktrees.git")
@@ -274,11 +321,14 @@ function M._do_worktree_delete(item)
   local ok, err = git.worktree_remove(item.wt_path, false)
   if not ok then
     if err and err:find("modified or untracked") then
+      local sw = show_status_win(item.wt_path, " Uncommitted changes: " .. item.branch .. " ")
+      sw:redraw()
       local fc = vim.fn.confirm(
         "Worktree has uncommitted changes!\nForce delete " .. item.display_path .. "?",
         "&Force Delete\n&Cancel",
         2
       )
+      sw:close()
       if fc ~= 1 then
         return
       end
@@ -326,11 +376,14 @@ function M._do_worktree_delete_extended(item)
     local ok, err = git.worktree_remove(item.wt_path, false)
     if not ok then
       if err and err:find("modified or untracked") then
+        local sw = show_status_win(item.wt_path, " Uncommitted changes: " .. item.branch .. " ")
+        sw:redraw()
         local fc = vim.fn.confirm(
           "Worktree has uncommitted changes!\nForce delete " .. item.display_path .. "?",
           "&Force Delete\n&Cancel",
           2
         )
+        sw:close()
         if fc ~= 1 then
           return
         end
