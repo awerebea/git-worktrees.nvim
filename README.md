@@ -188,6 +188,26 @@ require("git-worktrees").setup({
 | `<M-n>` | Fork branch (worktree pickers: create branch + worktree; branch picker: branch only) |
 | `<M-g>` | Cycle branch type: local -> remote -> all -> local                                   |
 
+## Stash Transfer When Forking
+
+When you press `<M-n>` to fork a branch from a worktree picker and the current worktree
+has uncommitted changes (staged or unstaged tracked files), the plugin detects this and
+offers three choices:
+
+| Choice       | Behaviour                                                              |
+| ------------ | ---------------------------------------------------------------------- |
+| **Move**     | Stash changes, create branch + worktree, apply stash in the new worktree. If the apply fails, reset the new worktree and restore the stash to the original. If even that fails, display an actionable error with the stash ref and recovery command. |
+| **Leave here** | Proceed with the fork without touching the current changes (default). |
+| **Cancel**   | Abort the entire operation.                                            |
+
+If worktree creation fails for any reason after the branch was already created (git error,
+user cancelled the path prompt), the plugin automatically deletes the orphaned branch and
+restores any pending stash to the original worktree.
+
+This mirrors the behaviour of the companion
+[fzf-git-branches](https://github.com/awerebea/fzf-git-branches) shell script and is
+not present in most other Neovim worktree plugins.
+
 ## Hook Examples
 
 ### Abort switch when path matches a pattern (before_switch)

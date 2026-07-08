@@ -328,6 +328,72 @@ function M.local_branch_exists(branch_name, cwd)
   return out ~= nil and out:match("%S") ~= nil
 end
 
+---Return true when the worktree at cwd has uncommitted changes in tracked files.
+---Checks both the working tree (git diff) and the index (git diff --cached),
+---matching fgb's `! git diff --quiet || ! git diff --cached --quiet` pattern.
+---Untracked files are intentionally ignored (fgb -uno behaviour).
+---@param cwd string
+---@return boolean
+function M.has_uncommitted_changes(cwd)
+  local r = vim.system({ "git", "diff", "--quiet" }, { cwd = cwd }):wait()
+  if r.code ~= 0 then
+    return true
+  end
+  r = vim.system({ "git", "diff", "--cached", "--quiet" }, { cwd = cwd }):wait()
+  return r.code ~= 0
+end
+
+---Return a short status listing of changed tracked files (no untracked, for display).
+---@param cwd string
+---@return string
+function M.get_status_short(cwd)
+  local out = run({ "git", "status", "--short", "-uno" }, cwd)
+  return out and out:gsub("%s+$", "") or ""
+end
+
+---Stash uncommitted changes with a descriptive message. The stash ID is captured
+---immediately by position to avoid fragile message-based grep lookups (fgb fix).
+---@param message string
+---@param cwd string
+---@return string|nil stash_id e.g. "stash@{0}"
+---@return string|nil error
+function M.stash_create(message, cwd)
+  local result = vim.system({ "git", "stash", "push", "-m", message }, { text = true, cwd = cwd }):wait()
+  if result.code ~= 0 then
+    return nil, result.stderr or "failed"
+  end
+  local out = run({ "git", "stash", "list", "--format=%gd" }, cwd)
+  if not out then
+    return nil, "stash created but could not retrieve stash ID"
+  end
+  return out:match("^([^\n]+)") or "stash@{0}", nil
+end
+
+---Apply a stash to the working tree at cwd. Uses exit code as the authoritative
+---signal (not output content) -- mirrors fgb commit 9b48f9c.
+---@param stash_id string
+---@param cwd string
+---@return boolean ok
+function M.stash_apply(stash_id, cwd)
+  local result = vim.system({ "git", "stash", "apply", stash_id }, { text = true, cwd = cwd }):wait()
+  return result.code == 0
+end
+
+---Drop a stash ref silently (best-effort cleanup).
+---@param stash_id string
+---@param cwd string
+function M.stash_drop(stash_id, cwd)
+  vim.system({ "git", "stash", "drop", stash_id }, { text = true, cwd = cwd }):wait()
+end
+
+---Hard-reset a worktree and remove untracked files. Used to clean a new worktree
+---before attempting the stash-restore fallback -- mirrors fgb's reset --hard + clean -fd.
+---@param cwd string
+function M.worktree_reset_hard(cwd)
+  vim.system({ "git", "reset", "--hard", "HEAD" }, { text = true, cwd = cwd }):wait()
+  vim.system({ "git", "clean", "-fd" }, { text = true, cwd = cwd }):wait()
+end
+
 ---Return the short commit hash and subject line for the given ref.
 ---@param ref string Full or short ref (e.g. "refs/heads/main", "refs/remotes/origin/feat").
 ---@param cwd string

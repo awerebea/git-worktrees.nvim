@@ -134,8 +134,11 @@ function M._do_switch(item, force_prompt)
 end
 
 ---Prompt for (or derive) a worktree path, run `git worktree add`, then switch.
+---Returns the absolute path of the created worktree on success, nil on any failure or
+---cancellation. Callers that fork a branch first must handle the nil case (clean up).
 ---@param item GitWorktrees.Snapshot
 ---@param force_prompt boolean
+---@return string|nil wt_path Absolute path of the new worktree, or nil on failure.
 function M._create_worktree(item, force_prompt)
   local git = require("git-worktrees.git")
   local config = require("git-worktrees").config
@@ -145,7 +148,7 @@ function M._create_worktree(item, force_prompt)
   local wt_data = git.get_worktree_data(cwd)
   if not wt_data then
     vim.notify("git-worktrees: not a git repo", vim.log.levels.ERROR)
-    return
+    return nil
   end
 
   local tmpl = wt_data.is_bare and config.wt_base_path_bare or config.wt_base_path_regular
@@ -164,7 +167,7 @@ function M._create_worktree(item, force_prompt)
     local input = vim.fn.input("Worktree path (relative to " .. display_base .. " or absolute): ", branch_safe)
     if input == "" then
       vim.notify("git-worktrees: cancelled", vim.log.levels.WARN)
-      return
+      return nil
     end
     if input:sub(1, 1) == "/" then
       wt_path = input
@@ -183,13 +186,13 @@ function M._create_worktree(item, force_prompt)
 
   local from_path = vim.fn.getcwd()
   if run_hook("before_switch", from_path, wt_path) == false then
-    return
+    return nil
   end
 
   local ok, err = git.worktree_add(wt_path, branch_name, cwd)
   if not ok then
     vim.notify("git-worktrees: " .. (err or "failed"), vim.log.levels.ERROR)
-    return
+    return nil
   end
 
   vim.fn.chdir(wt_path)
@@ -198,6 +201,7 @@ function M._create_worktree(item, force_prompt)
   run_hook("on_add", branch_name, wt_path)
   run_hook("on_switch", from_path, wt_path)
   swap_current_buffer(from_path, wt_path)
+  return wt_path
 end
 
 ---Delete the worktree for the selected branch, then optionally the branch itself.
@@ -546,8 +550,64 @@ function M.branch_fork(picker, item)
   end)
 end
 
+---Apply a stash to a worktree, with automatic fallback to the original worktree on failure.
+---Mirrors fgb's __fgb_git_worktree_restore_stash error-handling pattern, including the
+---fgb fix to use exit code (not output grep) as the authoritative success signal.
+---
+---When new_wt_path is provided, attempts to apply there first; on failure, resets the new
+---worktree (reset --hard + clean -fd) and falls back to init_wt_path. When new_wt_path is
+---nil, applies directly to init_wt_path (used when worktree creation never succeeded).
+---If both attempts fail, logs an actionable error message with the stash ref and recovery
+---command so the user can manually recover their changes.
+---@param stash_id string Stash ref (e.g. "stash@{0}") captured at push time.
+---@param init_wt_path string Original worktree absolute path used as fallback destination.
+---@param new_wt_path string|nil New worktree absolute path; nil for direct restore.
+local function restore_stash(stash_id, init_wt_path, new_wt_path)
+  local git = require("git-worktrees.git")
+
+  if new_wt_path then
+    if git.stash_apply(stash_id, new_wt_path) then
+      git.stash_drop(stash_id, new_wt_path)
+      vim.notify("Changes moved to new worktree.", vim.log.levels.INFO)
+      return
+    end
+    vim.notify(
+      "git-worktrees: stash apply failed in new worktree; restoring to original worktree.",
+      vim.log.levels.WARN
+    )
+    git.worktree_reset_hard(new_wt_path)
+  end
+
+  if git.stash_apply(stash_id, init_wt_path) then
+    git.stash_drop(stash_id, init_wt_path)
+    vim.notify("Changes restored to original worktree.", vim.log.levels.INFO)
+  else
+    vim.notify(
+      "git-worktrees: failed to restore stash to original worktree.\n"
+        .. "Your changes are saved as: "
+        .. stash_id
+        .. "\n"
+        .. "Recover with: git -C "
+        .. init_wt_path
+        .. " stash apply "
+        .. stash_id,
+      vim.log.levels.ERROR
+    )
+  end
+end
+
 ---Fork the selected branch and immediately create + switch to a worktree for it.
----Used by the worktree pickers where a new branch should also get a worktree.
+---
+---If the current worktree has uncommitted changes (tracked files only), the user is offered
+---three choices:
+---  Move       - stash changes, create branch + worktree, apply stash there. On stash-apply
+---               failure the new worktree is reset and the stash is restored to the original.
+---  Leave here - proceed with the fork without touching the current changes (default).
+---  Cancel     - abort the entire operation.
+---
+---On any error after the branch is created (worktree creation failure, user cancellation of
+---the path prompt) the orphaned branch is automatically deleted and any pending stash is
+---restored to the original worktree.
 ---@param picker snacks.Picker
 ---@param item GitWorktrees.Item
 function M.worktree_fork(picker, item)
@@ -555,6 +615,8 @@ function M.worktree_fork(picker, item)
   picker:close()
   vim.schedule(function()
     local git = require("git-worktrees.git")
+    local init_wt_path = vim.fn.getcwd()
+
     local base_name = snapshot.branch
     if snapshot.is_remote then
       base_name = base_name:match("[^/]+/(.+)") or base_name
@@ -564,19 +626,72 @@ function M.worktree_fork(picker, item)
       vim.notify("git-worktrees: cancelled", vim.log.levels.WARN)
       return
     end
+
+    -- Detect uncommitted changes and offer stash-transfer to the new worktree.
+    local stash_id = nil
+    if git.has_uncommitted_changes(init_wt_path) then
+      local status = git.get_status_short(init_wt_path)
+      local choice = vim.fn.confirm(
+        "Uncommitted changes in current worktree:\n\n" .. status .. "\n\n"
+          .. "Move them to the new worktree '"
+          .. new_name
+          .. "'?",
+        "&Move\n&Leave here\n&Cancel",
+        2
+      )
+      if choice == 3 then
+        vim.notify("git-worktrees: cancelled", vim.log.levels.WARN)
+        return
+      end
+      if choice == 1 then
+        local sid, err = git.stash_create(
+          "Stash to restore in new worktree for branch '" .. new_name .. "'",
+          init_wt_path
+        )
+        if not sid then
+          vim.notify("git-worktrees: failed to stash changes: " .. (err or "unknown"), vim.log.levels.ERROR)
+          return
+        end
+        stash_id = sid
+      end
+    end
+
+    -- Create the new branch. On failure, restore any stash and abort.
     local ok, err = git.branch_create(new_name, snapshot.branch)
     if not ok then
       vim.notify("git-worktrees: " .. (err or "failed"), vim.log.levels.ERROR)
+      if stash_id then
+        restore_stash(stash_id, init_wt_path, nil)
+      end
       return
     end
     vim.notify("Created branch: " .. new_name .. " from '" .. snapshot.branch .. "'", vim.log.levels.INFO)
-    M._create_worktree({
+
+    -- Create the worktree. On failure, delete the orphaned branch and restore any stash.
+    local new_wt_path = M._create_worktree({
       branch = new_name,
       ref = "refs/heads/" .. new_name,
       is_remote = false,
       wt_path = nil,
       display_path = "",
     }, false)
+
+    if not new_wt_path then
+      git.branch_delete(new_name, true)
+      vim.notify(
+        "git-worktrees: deleted orphaned branch '" .. new_name .. "' (worktree creation aborted).",
+        vim.log.levels.WARN
+      )
+      if stash_id then
+        restore_stash(stash_id, init_wt_path, nil)
+      end
+      return
+    end
+
+    -- Apply stash to the new worktree (falls back to original on failure).
+    if stash_id then
+      restore_stash(stash_id, init_wt_path, new_wt_path)
+    end
   end)
 end
 
