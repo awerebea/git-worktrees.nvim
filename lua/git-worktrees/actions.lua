@@ -534,6 +534,7 @@ function M.branch_fork(picker, item)
   picker:close()
   vim.schedule(function()
     local git = require("git-worktrees.git")
+    local cwd = vim.fn.getcwd()
     local base_name = snapshot.branch
     if snapshot.is_remote then
       base_name = base_name:match("[^/]+/(.+)") or base_name
@@ -544,10 +545,16 @@ function M.branch_fork(picker, item)
       return
     end
     local ok, err = git.branch_create(new_name, snapshot.branch)
-    if ok then
-      notify("Created branch: " .. new_name .. " from '" .. snapshot.branch .. "'", vim.log.levels.INFO)
-    else
+    if not ok then
       notify("git-worktrees: " .. (err or "failed"), vim.log.levels.ERROR)
+      return
+    end
+    notify("Created branch: " .. new_name .. " from '" .. snapshot.branch .. "'", vim.log.levels.INFO)
+    local sw_ok, sw_err = git.branch_switch(new_name, cwd)
+    if sw_ok then
+      notify("Switched to branch: " .. new_name, vim.log.levels.INFO)
+    else
+      notify("git-worktrees: could not switch to '" .. new_name .. "': " .. (sw_err or "failed"), vim.log.levels.WARN)
     end
   end)
 end
