@@ -27,6 +27,8 @@
 ---@field swap_current_buffer? boolean|"ask" false: leave buffer; true: auto-swap; "ask": prompt. (default: false)
 ---@field switch_file_command? string|nil Vim command to open the swapped file. nil skips opening. (default: "edit")
 ---@field disable_default_keymaps? boolean Suppress the keymaps registered by setup(). (default: false)
+---@field notify_timeout? integer|nil Timeout in ms for plugin notifications. nil uses the notification handler's own default. (default: nil)
+---@field branch_info_timeout? integer Timeout in ms for the branch info popup opened by <C-o>. (default: 5000)
 ---@field hooks? GitWorktrees.Hooks Lifecycle hooks.
 ---@field filter? "no_worktree"|"has_worktree"|nil Internal: item filter for specialised pickers.
 ---@field _initial_pattern? string Internal: initial search pattern preserved across branch-type cycles.
@@ -47,6 +49,8 @@ M.config = {
   swap_current_buffer = false,
   switch_file_command = "edit",
   disable_default_keymaps = false,
+  notify_timeout = nil,
+  branch_info_timeout = 5000,
   hooks = {},
 }
 

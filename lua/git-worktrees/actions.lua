@@ -8,6 +8,17 @@
 
 local M = {}
 
+---Wrapper around vim.notify that applies the plugin-configured notification timeout.
+---Pass an explicit timeout (ms) to override the global notify_timeout for that call.
+---@param msg string
+---@param level integer vim.log.levels constant.
+---@param timeout? integer|nil Override timeout in ms; nil falls back to notify_timeout config.
+local function notify(msg, level, timeout)
+  local config = require("git-worktrees").config
+  local t = timeout ~= nil and timeout or config.notify_timeout
+  vim.notify(msg, level, t ~= nil and { timeout = t } or nil)
+end
+
 ---Invoke a lifecycle hook by name, forwarding all extra arguments.
 ---Returns the hook's return value so callers can react (e.g. before_switch
 ---returning false aborts the operation).
@@ -22,7 +33,7 @@ local function run_hook(name, ...)
   end
   local ok, result = pcall(hook, ...)
   if not ok then
-    vim.notify("git-worktrees: hook '" .. name .. "' error: " .. tostring(result), vim.log.levels.WARN)
+    notify("git-worktrees: hook '" .. name .. "' error: " .. tostring(result), vim.log.levels.WARN)
     return nil
   end
   return result
@@ -124,7 +135,7 @@ function M._do_switch(item, force_prompt)
       return
     end
     vim.fn.chdir(to_path)
-    vim.notify("Switched to worktree: " .. item.display_path, vim.log.levels.INFO)
+    notify("Switched to worktree: " .. item.display_path, vim.log.levels.INFO)
     run_hook("on_switch", from_path, to_path)
     swap_current_buffer(from_path, to_path)
     return
@@ -147,7 +158,7 @@ function M._create_worktree(item, force_prompt)
 
   local wt_data = git.get_worktree_data(cwd)
   if not wt_data then
-    vim.notify("git-worktrees: not a git repo", vim.log.levels.ERROR)
+    notify("git-worktrees: not a git repo", vim.log.levels.ERROR)
     return nil
   end
 
@@ -166,7 +177,7 @@ function M._create_worktree(item, force_prompt)
   else
     local input = vim.fn.input("Worktree path (relative to " .. display_base .. " or absolute): ", branch_safe)
     if input == "" then
-      vim.notify("git-worktrees: cancelled", vim.log.levels.WARN)
+      notify("git-worktrees: cancelled", vim.log.levels.WARN)
       return nil
     end
     if input:sub(1, 1) == "/" then
@@ -191,13 +202,13 @@ function M._create_worktree(item, force_prompt)
 
   local ok, err = git.worktree_add(wt_path, branch_name, cwd)
   if not ok then
-    vim.notify("git-worktrees: " .. (err or "failed"), vim.log.levels.ERROR)
+    notify("git-worktrees: " .. (err or "failed"), vim.log.levels.ERROR)
     return nil
   end
 
   vim.fn.chdir(wt_path)
   local display = fmt.format_path(wt_path, config.wt_path_display, wt_data.git_common_dir, base_path, wt_data.git_root)
-  vim.notify("Created worktree: " .. display .. " for '" .. branch_name .. "'", vim.log.levels.INFO)
+  notify("Created worktree: " .. display .. " for '" .. branch_name .. "'", vim.log.levels.INFO)
   run_hook("on_add", branch_name, wt_path)
   run_hook("on_switch", from_path, wt_path)
   swap_current_buffer(from_path, wt_path)
@@ -250,7 +261,7 @@ function M._do_worktree_delete(item)
   end
 
   if item.is_current then
-    vim.notify("git-worktrees: cannot delete the current worktree", vim.log.levels.WARN)
+    notify("git-worktrees: cannot delete the current worktree", vim.log.levels.WARN)
     return
   end
 
@@ -273,17 +284,17 @@ function M._do_worktree_delete(item)
       end
       ok, err = git.worktree_remove(item.wt_path, true)
       if not ok then
-        vim.notify("git-worktrees: " .. (err or "failed"), vim.log.levels.ERROR)
+        notify("git-worktrees: " .. (err or "failed"), vim.log.levels.ERROR)
         return
       end
     else
-      vim.notify("git-worktrees: " .. (err or "failed"), vim.log.levels.ERROR)
+      notify("git-worktrees: " .. (err or "failed"), vim.log.levels.ERROR)
       return
     end
   end
 
   run_hook("on_delete", item.branch, item.wt_path)
-  vim.notify("Deleted worktree: " .. item.display_path, vim.log.levels.INFO)
+  notify("Deleted worktree: " .. item.display_path, vim.log.levels.INFO)
 
   if not item.is_remote then
     local bc = vim.fn.confirm("Also delete branch '" .. item.branch .. "'?", "&Yes\n&No", 2)
@@ -299,7 +310,7 @@ function M._do_worktree_delete_extended(item)
   local git = require("git-worktrees.git")
 
   if item.is_current then
-    vim.notify("git-worktrees: cannot delete the current worktree", vim.log.levels.WARN)
+    notify("git-worktrees: cannot delete the current worktree", vim.log.levels.WARN)
     return
   end
 
@@ -325,16 +336,16 @@ function M._do_worktree_delete_extended(item)
         end
         ok, err = git.worktree_remove(item.wt_path, true)
         if not ok then
-          vim.notify("git-worktrees: " .. (err or "failed"), vim.log.levels.ERROR)
+          notify("git-worktrees: " .. (err or "failed"), vim.log.levels.ERROR)
           return
         end
       else
-        vim.notify("git-worktrees: " .. (err or "failed"), vim.log.levels.ERROR)
+        notify("git-worktrees: " .. (err or "failed"), vim.log.levels.ERROR)
         return
       end
     end
     run_hook("on_delete", item.branch, item.wt_path)
-    vim.notify("Deleted worktree: " .. item.display_path, vim.log.levels.INFO)
+    notify("Deleted worktree: " .. item.display_path, vim.log.levels.INFO)
   end
 
   M._do_branch_delete_extended(item)
@@ -350,7 +361,7 @@ function M._do_branch_delete(item)
     local remote = item.branch:match("^([^/]+)/")
     local branch_name = item.branch:match("[^/]+/(.+)")
     if not remote or not branch_name then
-      vim.notify("git-worktrees: cannot parse remote branch: " .. item.branch, vim.log.levels.ERROR)
+      notify("git-worktrees: cannot parse remote branch: " .. item.branch, vim.log.levels.ERROR)
       return
     end
     local choice =
@@ -360,9 +371,9 @@ function M._do_branch_delete(item)
     end
     local ok, err = git.branch_delete_remote(remote, branch_name, cwd)
     if ok then
-      vim.notify("Deleted remote branch: " .. item.branch, vim.log.levels.INFO)
+      notify("Deleted remote branch: " .. item.branch, vim.log.levels.INFO)
     else
-      vim.notify("git-worktrees: " .. (err or "failed"), vim.log.levels.ERROR)
+      notify("git-worktrees: " .. (err or "failed"), vim.log.levels.ERROR)
     end
     return
   end
@@ -378,16 +389,16 @@ function M._do_branch_delete(item)
       if fc == 1 then
         ok, err = git.branch_delete(item.branch, true)
         if ok then
-          vim.notify("Force deleted branch: " .. item.branch, vim.log.levels.WARN)
+          notify("Force deleted branch: " .. item.branch, vim.log.levels.WARN)
         else
-          vim.notify("git-worktrees: " .. (err or "failed"), vim.log.levels.ERROR)
+          notify("git-worktrees: " .. (err or "failed"), vim.log.levels.ERROR)
         end
       end
     else
-      vim.notify("git-worktrees: " .. (err or "failed"), vim.log.levels.ERROR)
+      notify("git-worktrees: " .. (err or "failed"), vim.log.levels.ERROR)
     end
   else
-    vim.notify("Deleted branch: " .. item.branch, vim.log.levels.INFO)
+    notify("Deleted branch: " .. item.branch, vim.log.levels.INFO)
   end
 end
 
@@ -403,7 +414,7 @@ function M._do_branch_delete_extended(item)
     local remote = item.branch:match("^([^/]+)/")
     local branch_name = item.branch:match("[^/]+/(.+)")
     if not remote or not branch_name then
-      vim.notify("git-worktrees: cannot parse remote branch: " .. item.branch, vim.log.levels.ERROR)
+      notify("git-worktrees: cannot parse remote branch: " .. item.branch, vim.log.levels.ERROR)
       return
     end
     local choice =
@@ -413,10 +424,10 @@ function M._do_branch_delete_extended(item)
     end
     local ok, err = git.branch_delete_remote(remote, branch_name, cwd)
     if not ok then
-      vim.notify("git-worktrees: " .. (err or "failed"), vim.log.levels.ERROR)
+      notify("git-worktrees: " .. (err or "failed"), vim.log.levels.ERROR)
       return
     end
-    vim.notify("Deleted remote branch: " .. item.branch, vim.log.levels.INFO)
+    notify("Deleted remote branch: " .. item.branch, vim.log.levels.INFO)
     if git.local_branch_exists(branch_name, cwd) then
       local lc = vim.fn.confirm("Also delete local branch '" .. branch_name .. "'?", "&Yes\n&No", 2)
       if lc == 1 then
@@ -440,16 +451,16 @@ function M._do_branch_delete_extended(item)
       end
       ok, err = git.branch_delete(item.branch, true)
       if not ok then
-        vim.notify("git-worktrees: " .. (err or "failed"), vim.log.levels.ERROR)
+        notify("git-worktrees: " .. (err or "failed"), vim.log.levels.ERROR)
         return
       end
-      vim.notify("Force deleted branch: " .. item.branch, vim.log.levels.WARN)
+      notify("Force deleted branch: " .. item.branch, vim.log.levels.WARN)
     else
-      vim.notify("git-worktrees: " .. (err or "failed"), vim.log.levels.ERROR)
+      notify("git-worktrees: " .. (err or "failed"), vim.log.levels.ERROR)
       return
     end
   else
-    vim.notify("Deleted branch: " .. item.branch, vim.log.levels.INFO)
+    notify("Deleted branch: " .. item.branch, vim.log.levels.INFO)
   end
 
   local upstream = git.get_branch_upstream(item.branch, cwd)
@@ -462,9 +473,9 @@ function M._do_branch_delete_extended(item)
       if rc == 1 then
         local rok, rerr = git.branch_delete_remote(remote, branch_name, cwd)
         if rok then
-          vim.notify("Deleted remote branch: " .. upstream, vim.log.levels.INFO)
+          notify("Deleted remote branch: " .. upstream, vim.log.levels.INFO)
         else
-          vim.notify("git-worktrees: " .. (rerr or "failed"), vim.log.levels.ERROR)
+          notify("git-worktrees: " .. (rerr or "failed"), vim.log.levels.ERROR)
         end
       end
     end
@@ -485,9 +496,9 @@ function M.branch_switch(picker, item)
     end
     local ok, err = git.branch_switch(branch, vim.fn.getcwd())
     if ok then
-      vim.notify("Switched to branch: " .. branch, vim.log.levels.INFO)
+      notify("Switched to branch: " .. branch, vim.log.levels.INFO)
     else
-      vim.notify("git-worktrees: " .. (err or "failed"), vim.log.levels.ERROR)
+      notify("git-worktrees: " .. (err or "failed"), vim.log.levels.ERROR)
     end
   end)
 end
@@ -529,14 +540,14 @@ function M.branch_fork(picker, item)
     end
     local new_name = vim.fn.input("New branch name: ", base_name .. "-fork")
     if new_name == "" then
-      vim.notify("git-worktrees: cancelled", vim.log.levels.WARN)
+      notify("git-worktrees: cancelled", vim.log.levels.WARN)
       return
     end
     local ok, err = git.branch_create(new_name, snapshot.branch)
     if ok then
-      vim.notify("Created branch: " .. new_name .. " from '" .. snapshot.branch .. "'", vim.log.levels.INFO)
+      notify("Created branch: " .. new_name .. " from '" .. snapshot.branch .. "'", vim.log.levels.INFO)
     else
-      vim.notify("git-worktrees: " .. (err or "failed"), vim.log.levels.ERROR)
+      notify("git-worktrees: " .. (err or "failed"), vim.log.levels.ERROR)
     end
   end)
 end
@@ -559,10 +570,10 @@ local function restore_stash(stash_id, init_wt_path, new_wt_path)
   if new_wt_path then
     if git.stash_apply(stash_id, new_wt_path) then
       git.stash_drop(stash_id, new_wt_path)
-      vim.notify("Changes moved to new worktree.", vim.log.levels.INFO)
+      notify("Changes moved to new worktree.", vim.log.levels.INFO)
       return
     end
-    vim.notify(
+    notify(
       "git-worktrees: stash apply failed in new worktree; restoring to original worktree.",
       vim.log.levels.WARN
     )
@@ -571,9 +582,9 @@ local function restore_stash(stash_id, init_wt_path, new_wt_path)
 
   if git.stash_apply(stash_id, init_wt_path) then
     git.stash_drop(stash_id, init_wt_path)
-    vim.notify("Changes restored to original worktree.", vim.log.levels.INFO)
+    notify("Changes restored to original worktree.", vim.log.levels.INFO)
   else
-    vim.notify(
+    notify(
       "git-worktrees: failed to restore stash to original worktree.\n"
         .. "Your changes are saved as: "
         .. stash_id
@@ -614,7 +625,7 @@ function M.worktree_fork(picker, item)
     end
     local new_name = vim.fn.input("New branch name: ", base_name .. "-fork")
     if new_name == "" then
-      vim.notify("git-worktrees: cancelled", vim.log.levels.WARN)
+      notify("git-worktrees: cancelled", vim.log.levels.WARN)
       return
     end
 
@@ -633,14 +644,14 @@ function M.worktree_fork(picker, item)
         2
       )
       if choice == 3 then
-        vim.notify("git-worktrees: cancelled", vim.log.levels.WARN)
+        notify("git-worktrees: cancelled", vim.log.levels.WARN)
         return
       end
       if choice == 1 then
         local sid, err =
           git.stash_create("Stash to restore in new worktree for branch '" .. new_name .. "'", init_wt_path)
         if not sid then
-          vim.notify("git-worktrees: failed to stash changes: " .. (err or "unknown"), vim.log.levels.ERROR)
+          notify("git-worktrees: failed to stash changes: " .. (err or "unknown"), vim.log.levels.ERROR)
           return
         end
         stash_id = sid
@@ -650,13 +661,13 @@ function M.worktree_fork(picker, item)
     -- Create the new branch. On failure, restore any stash and abort.
     local ok, err = git.branch_create(new_name, snapshot.branch)
     if not ok then
-      vim.notify("git-worktrees: " .. (err or "failed"), vim.log.levels.ERROR)
+      notify("git-worktrees: " .. (err or "failed"), vim.log.levels.ERROR)
       if stash_id then
         restore_stash(stash_id, init_wt_path, nil)
       end
       return
     end
-    vim.notify("Created branch: " .. new_name .. " from '" .. snapshot.branch .. "'", vim.log.levels.INFO)
+    notify("Created branch: " .. new_name .. " from '" .. snapshot.branch .. "'", vim.log.levels.INFO)
 
     -- Create the worktree. On failure, delete the orphaned branch and restore any stash.
     local new_wt_path = M._create_worktree({
@@ -669,7 +680,7 @@ function M.worktree_fork(picker, item)
 
     if not new_wt_path then
       git.branch_delete(new_name, true)
-      vim.notify(
+      notify(
         "git-worktrees: deleted orphaned branch '" .. new_name .. "' (worktree creation aborted).",
         vim.log.levels.WARN
       )
@@ -686,33 +697,57 @@ function M.worktree_fork(picker, item)
   end)
 end
 
----Show branch metadata as a vim.notify without closing the picker.
+---Show branch metadata as a notification without closing the picker.
+---Format matches fgb's __fgb_print_branch_info output.
+---Timeout is controlled by config.branch_info_timeout (default 5000 ms).
 ---@param picker snacks.Picker
 ---@param item GitWorktrees.Item
 function M.branch_info(picker, item) --luacheck: ignore picker
   local git = require("git-worktrees.git")
+  local config = require("git-worktrees").config
   local snapshot = vim.deepcopy({
     branch = item.branch,
     ref = item.ref,
     display_path = item.display_path,
-    author = item.author,
-    date = item.date,
-    is_current = item.is_current,
+    is_remote = item.is_remote,
   })
-  local hash, subject = git.get_commit_info(snapshot.ref, vim.fn.getcwd())
-  local lines = {
-    "Branch:   " .. snapshot.branch,
-    "Ref:      " .. snapshot.ref,
-    "Worktree: " .. (snapshot.display_path ~= "" and snapshot.display_path or "(none)"),
-    "Author:   " .. (snapshot.author or ""),
-    "Date:     " .. (snapshot.date or ""),
-    hash and ("Commit:   " .. hash .. "  " .. (subject or "")) or "",
-    snapshot.is_current and "(current)" or "",
-  }
-  while #lines > 0 and lines[#lines] == "" do
-    table.remove(lines)
+
+  -- Right-pad label to 13 chars then append " : " (total prefix = 16 chars).
+  -- "committerdate" is the longest label at 13 chars; all others are padded to match.
+  local function field(label, value)
+    return label .. string.rep(" ", 13 - #label) .. " : " .. value
   end
-  vim.notify(table.concat(lines, "\n"), vim.log.levels.INFO)
+
+  local lines = { field("branch", snapshot.branch) }
+  if not snapshot.is_remote and snapshot.display_path ~= "" then
+    lines[#lines + 1] = field("worktree", snapshot.display_path)
+  end
+
+  local details = git.get_commit_details(snapshot.ref, vim.fn.getcwd())
+  if details then
+    lines[#lines + 1] = field("author", details.author_name .. " <" .. details.author_email .. ">")
+    lines[#lines + 1] = field("authordate", details.author_date)
+    lines[#lines + 1] = field("committer", details.committer_name .. " <" .. details.committer_email .. ">")
+    lines[#lines + 1] = field("committerdate", details.committer_date)
+    lines[#lines + 1] = field("HEAD", details.hash)
+
+    -- Format message: first line on the same row as the label; continuation lines
+    -- indented by 16 spaces (= prefix width) to align content under the first line.
+    local msg_lines = vim.split(details.message, "\n", { plain = true })
+    while #msg_lines > 0 and msg_lines[#msg_lines]:match("^%s*$") do
+      table.remove(msg_lines)
+    end
+    if #msg_lines > 0 then
+      local indent = string.rep(" ", 16)
+      lines[#lines + 1] = field("message", msg_lines[1])
+      for i = 2, #msg_lines do
+        lines[#lines + 1] = msg_lines[i] == "" and "" or (indent .. msg_lines[i])
+      end
+    end
+  end
+
+  local t = config.branch_info_timeout ~= nil and config.branch_info_timeout or 5000
+  notify(table.concat(lines, "\n"), vim.log.levels.INFO, t)
 end
 
 return M

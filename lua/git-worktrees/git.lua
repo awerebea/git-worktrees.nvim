@@ -393,20 +393,54 @@ function M.worktree_reset_hard(cwd)
   vim.system({ "git", "clean", "-fd" }, { text = true, cwd = cwd }):wait()
 end
 
----Return the short commit hash and subject line for the given ref.
+---@class GitWorktrees.CommitDetails
+---@field hash string Full commit hash.
+---@field author_name string Author name.
+---@field author_email string Author email.
+---@field author_date string Author date in ISO 8601 format with timezone (e.g. "2026-07-08 01:40:10 -0400").
+---@field committer_name string Committer name.
+---@field committer_email string Committer email.
+---@field committer_date string Committer date in ISO 8601 format with timezone.
+---@field message string Full commit message body (%B, trailing whitespace trimmed).
+
+---Return rich commit details for the given ref (used by branch_info).
+---Fields match fgb's __fgb_print_branch_info output.
 ---@param ref string Full or short ref (e.g. "refs/heads/main", "refs/remotes/origin/feat").
 ---@param cwd string
----@return string|nil hash Short commit hash.
----@return string|nil subject First line of the commit message.
-function M.get_commit_info(ref, cwd)
+---@return GitWorktrees.CommitDetails|nil
+function M.get_commit_details(ref, cwd)
   local sep = "\x1f"
-  local out = run({ "git", "log", "-1", "--format=%h" .. sep .. "%s", ref }, cwd)
+  local fmt = "%H" .. sep .. "%an" .. sep .. "%ae" .. sep .. "%ai"
+    .. sep .. "%cn" .. sep .. "%ce" .. sep .. "%ci" .. sep .. "%B"
+  local out = run({ "git", "log", "-1", "--format=" .. fmt, ref }, cwd)
   if not out then
-    return nil, nil
+    return nil
   end
-  out = out:gsub("%s+$", "")
-  local parts = vim.split(out, sep, { plain = true })
-  return (parts[1] ~= "" and parts[1] or nil), (parts[2] ~= "" and parts[2] or nil)
+  -- Split on exactly 7 separators so that the 8th field (%B) is kept whole even
+  -- if the commit message body contains the separator character.
+  local parts = {}
+  local rest = out
+  for _ = 1, 7 do
+    local pos = rest:find(sep, 1, true)
+    if not pos then
+      break
+    end
+    parts[#parts + 1] = rest:sub(1, pos - 1)
+    rest = rest:sub(pos + 1)
+  end
+  if #parts < 7 then
+    return nil
+  end
+  return {
+    hash = parts[1],
+    author_name = parts[2],
+    author_email = parts[3],
+    author_date = parts[4],
+    committer_name = parts[5],
+    committer_email = parts[6],
+    committer_date = parts[7],
+    message = rest:gsub("%s+$", ""),
+  }
 end
 
 return M

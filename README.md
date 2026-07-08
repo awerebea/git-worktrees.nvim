@@ -141,6 +141,14 @@ require("git-worktrees").setup({
   -- Set to true when you manage keymaps yourself (e.g. Lazy keys = {}).
   disable_default_keymaps = false,
 
+  -- Timeout in ms for plugin notifications (vim.notify calls).
+  -- nil means the notification handler uses its own default (e.g. 3 s in nvim-notify).
+  notify_timeout = nil,
+
+  -- Timeout in ms for the branch info popup opened by <C-o>.
+  -- Set to 0 to keep it visible until dismissed.
+  branch_info_timeout = 5000,
+
   -- Lifecycle hooks. All are optional functions.
   hooks = {
     -- Called before switching worktrees. Return false to abort.
