@@ -353,11 +353,8 @@ function M._do_branch_delete(item)
       vim.notify("git-worktrees: cannot parse remote branch: " .. item.branch, vim.log.levels.ERROR)
       return
     end
-    local choice = vim.fn.confirm(
-      "Delete remote branch '" .. branch_name .. "' from '" .. remote .. "'?",
-      "&Yes\n&No",
-      2
-    )
+    local choice =
+      vim.fn.confirm("Delete remote branch '" .. branch_name .. "' from '" .. remote .. "'?", "&Yes\n&No", 2)
     if choice ~= 1 then
       return
     end
@@ -409,11 +406,8 @@ function M._do_branch_delete_extended(item)
       vim.notify("git-worktrees: cannot parse remote branch: " .. item.branch, vim.log.levels.ERROR)
       return
     end
-    local choice = vim.fn.confirm(
-      "Delete remote branch '" .. branch_name .. "' from '" .. remote .. "'?",
-      "&Yes\n&No",
-      2
-    )
+    local choice =
+      vim.fn.confirm("Delete remote branch '" .. branch_name .. "' from '" .. remote .. "'?", "&Yes\n&No", 2)
     if choice ~= 1 then
       return
     end
@@ -463,11 +457,8 @@ function M._do_branch_delete_extended(item)
     local remote = upstream:match("^([^/]+)/")
     local branch_name = upstream:match("[^/]+/(.+)")
     if remote and branch_name then
-      local rc = vim.fn.confirm(
-        "Also delete remote branch '" .. branch_name .. "' from '" .. remote .. "'?",
-        "&Yes\n&No",
-        2
-      )
+      local rc =
+        vim.fn.confirm("Also delete remote branch '" .. branch_name .. "' from '" .. remote .. "'?", "&Yes\n&No", 2)
       if rc == 1 then
         local rok, rerr = git.branch_delete_remote(remote, branch_name, cwd)
         if rok then
@@ -632,7 +623,9 @@ function M.worktree_fork(picker, item)
     if git.has_uncommitted_changes(init_wt_path) then
       local status = git.get_status_short(init_wt_path)
       local choice = vim.fn.confirm(
-        "Uncommitted changes in current worktree:\n\n" .. status .. "\n\n"
+        "Uncommitted changes in current worktree:\n\n"
+          .. status
+          .. "\n\n"
           .. "Move them to the new worktree '"
           .. new_name
           .. "'?",
@@ -644,10 +637,8 @@ function M.worktree_fork(picker, item)
         return
       end
       if choice == 1 then
-        local sid, err = git.stash_create(
-          "Stash to restore in new worktree for branch '" .. new_name .. "'",
-          init_wt_path
-        )
+        local sid, err =
+          git.stash_create("Stash to restore in new worktree for branch '" .. new_name .. "'", init_wt_path)
         if not sid then
           vim.notify("git-worktrees: failed to stash changes: " .. (err or "unknown"), vim.log.levels.ERROR)
           return

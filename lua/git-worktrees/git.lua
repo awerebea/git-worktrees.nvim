@@ -297,8 +297,7 @@ end
 ---@return boolean ok
 ---@return string|nil error
 function M.branch_delete_remote(remote, branch_name, cwd)
-  local result =
-    vim.system({ "git", "push", remote, "--delete", branch_name }, { text = true, cwd = cwd }):wait()
+  local result = vim.system({ "git", "push", remote, "--delete", branch_name }, { text = true, cwd = cwd }):wait()
   if result.code ~= 0 then
     return false, result.stderr or "failed"
   end

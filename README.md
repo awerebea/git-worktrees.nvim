@@ -169,24 +169,24 @@ require("git-worktrees").setup({
 
 ## User Commands
 
-| Command              | Description                                                                                                    |
-| -------------------- | -------------------------------------------------------------------------------------------------------------- |
+| Command              | Description                                                                                                                                     |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
 | `:GitWorktreeTotal`  | All branches regardless of worktree status. Switch to or create a worktree, delete it (simple or extended), or fork to a new branch + worktree. |
 | `:GitWorktreeAdd`    | Only branches **without** a worktree. Create a worktree, fork the branch, or delete it (simple or extended).                                    |
 | `:GitWorktreeManage` | Only branches **with** a worktree. Jump between worktrees, delete one (simple or extended), or fork to a new branch + worktree.                 |
-| `:GitBranchManage`   | All branches. Switch HEAD, delete (local-only, remote-only, or full local+remote), or fork a branch.                                        |
+| `:GitBranchManage`   | All branches. Switch HEAD, delete (local-only, remote-only, or full local+remote), or fork a branch.                                            |
 
 ## In-picker Keybindings
 
-| Key     | Action                                                                               |
-| ------- | ------------------------------------------------------------------------------------ |
-| `<CR>`  | Switch to worktree / branch (create worktree if missing)                             |
-| `<C-x>` | Simple delete: local branch -> delete local only; remote branch -> delete remote only |
+| Key     | Action                                                                                                                                                                      |
+| ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `<CR>`  | Switch to worktree / branch (create worktree if missing)                                                                                                                    |
+| `<C-x>` | Simple delete: local branch -> delete local only; remote branch -> delete remote only                                                                                       |
 | `<M-x>` | Extended delete: local -> delete local then prompt to also delete remote; remote -> delete remote then prompt to also delete local; worktree pickers: remove worktree first |
-| `<M-v>` | Force path prompt even when `auto_worktree_path = true`                              |
-| `<C-o>` | Show branch info notification (branch, ref, worktree, author, date, HEAD commit)     |
-| `<M-n>` | Fork branch (worktree pickers: create branch + worktree; branch picker: branch only) |
-| `<M-g>` | Cycle branch type: local -> remote -> all -> local                                   |
+| `<M-v>` | Force path prompt even when `auto_worktree_path = true`                                                                                                                     |
+| `<C-o>` | Show branch info notification (branch, ref, worktree, author, date, HEAD commit)                                                                                            |
+| `<M-n>` | Fork branch (worktree pickers: create branch + worktree; branch picker: branch only)                                                                                        |
+| `<M-g>` | Cycle branch type: local -> remote -> all -> local                                                                                                                          |
 
 ## Stash Transfer When Forking
 
@@ -194,11 +194,11 @@ When you press `<M-n>` to fork a branch from a worktree picker and the current w
 has uncommitted changes (staged or unstaged tracked files), the plugin detects this and
 offers three choices:
 
-| Choice       | Behaviour                                                              |
-| ------------ | ---------------------------------------------------------------------- |
-| **Move**     | Stash changes, create branch + worktree, apply stash in the new worktree. If the apply fails, reset the new worktree and restore the stash to the original. If even that fails, display an actionable error with the stash ref and recovery command. |
-| **Leave here** | Proceed with the fork without touching the current changes (default). |
-| **Cancel**   | Abort the entire operation.                                            |
+| Choice         | Behaviour                                                                                                                                                                                                                                            |
+| -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Move**       | Stash changes, create branch + worktree, apply stash in the new worktree. If the apply fails, reset the new worktree and restore the stash to the original. If even that fails, display an actionable error with the stash ref and recovery command. |
+| **Leave here** | Proceed with the fork without touching the current changes (default).                                                                                                                                                                                |
+| **Cancel**     | Abort the entire operation.                                                                                                                                                                                                                          |
 
 If worktree creation fails for any reason after the branch was already created (git error,
 user cancelled the path prompt), the plugin automatically deletes the orphaned branch and
