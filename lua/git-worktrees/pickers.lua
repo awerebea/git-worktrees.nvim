@@ -268,6 +268,18 @@ function M.worktrees(config)
       worktree_switch_verbose = function(p, it)
         act.worktree_switch_verbose(p, it)
       end,
+      worktree_switch_edit = function(p, it)
+        act.worktree_switch_edit(p, it)
+      end,
+      worktree_switch_tabedit = function(p, it)
+        act.worktree_switch_tabedit(p, it)
+      end,
+      worktree_switch_vsplit = function(p, it)
+        act.worktree_switch_vsplit(p, it)
+      end,
+      worktree_switch_split = function(p, it)
+        act.worktree_switch_split(p, it)
+      end,
       worktree_delete = function(p, it)
         act.worktree_delete(p, it)
       end,
@@ -302,6 +314,10 @@ function M.worktrees(config)
           ["<M-v>"] = { "worktree_switch_verbose", mode = { "i", "n" } },
           ["<M-n>"] = { "worktree_fork", mode = { "i", "n" } },
           ["<M-g>"] = { "cycle_branch_type", mode = { "i", "n" } },
+          ["<C-e>"] = { "worktree_switch_edit", mode = { "i", "n" } },
+          ["<C-t>"] = { "worktree_switch_tabedit", mode = { "i", "n" } },
+          ["<C-v>"] = { "worktree_switch_vsplit", mode = { "i", "n" } },
+          ["<C-s>"] = { "worktree_switch_split", mode = { "i", "n" } },
         },
       },
       list = {
@@ -312,6 +328,10 @@ function M.worktrees(config)
           ["<M-v>"] = { "worktree_switch_verbose", mode = { "n" } },
           ["<M-n>"] = { "worktree_fork", mode = { "n" } },
           ["<M-g>"] = { "cycle_branch_type", mode = { "n" } },
+          ["<C-e>"] = { "worktree_switch_edit", mode = { "n" } },
+          ["<C-t>"] = { "worktree_switch_tabedit", mode = { "n" } },
+          ["<C-v>"] = { "worktree_switch_vsplit", mode = { "n" } },
+          ["<C-s>"] = { "worktree_switch_split", mode = { "n" } },
         },
       },
     },

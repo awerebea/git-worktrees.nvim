@@ -190,15 +190,23 @@ require("git-worktrees").setup({
 
 ## In-picker Keybindings
 
-| Key     | Action                                                                                                                                                                      |
-| ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `<CR>`  | Switch to worktree / branch (create worktree if missing)                                                                                                                    |
-| `<C-x>` | Simple delete: local branch -> delete local only; remote branch -> delete remote only                                                                                       |
-| `<M-x>` | Extended delete: local -> delete local then prompt to also delete remote; remote -> delete remote then prompt to also delete local; worktree pickers: remove worktree first |
-| `<M-v>` | Force path prompt even when `auto_worktree_path = true`                                                                                                                     |
-| `<C-o>` | Show branch info notification (branch, ref, worktree, author, date, HEAD commit)                                                                                            |
-| `<M-n>` | Fork branch (worktree pickers: create branch + worktree; branch picker: branch only)                                                                                        |
-| `<M-g>` | Cycle branch type: local -> remote -> all -> local                                                                                                                          |
+| Key     | Pickers          | Action                                                                                                                                                                      |
+| ------- | ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `<CR>`  | worktree, branch | Switch to worktree / branch (create worktree if missing); respects `switch_file_command`                                                                                    |
+| `<C-e>` | worktree only    | Switch and open the current file with `edit`, ignoring `switch_file_command`                                                                                                |
+| `<C-s>` | worktree only    | Switch and open the current file in a horizontal split, ignoring `switch_file_command`                                                                                      |
+| `<C-v>` | worktree only    | Switch and open the current file in a vertical split, ignoring `switch_file_command`                                                                                        |
+| `<C-t>` | worktree only    | Switch and open the current file in a new tab, ignoring `switch_file_command`                                                                                               |
+| `<C-x>` | worktree, branch | Simple delete: local branch -> delete local only; remote branch -> delete remote only                                                                                       |
+| `<M-x>` | worktree, branch | Extended delete: local -> delete local then prompt to also delete remote; remote -> delete remote then prompt to also delete local; worktree pickers: remove worktree first |
+| `<M-v>` | worktree only    | Force path prompt even when `auto_worktree_path = true`                                                                                                                     |
+| `<C-o>` | worktree, branch | Show branch info notification (branch, ref, worktree, author, date, HEAD commit)                                                                                            |
+| `<M-n>` | worktree, branch | Fork branch (worktree pickers: create branch + worktree; branch picker: branch only)                                                                                        |
+| `<M-g>` | worktree, branch | Cycle branch type: local -> remote -> all -> local                                                                                                                          |
+
+The four file-open overrides (`<C-e>`, `<C-s>`, `<C-v>`, `<C-t>`) only apply when
+`swap_current_buffer` is enabled. They override `switch_file_command` for that single
+action without changing the configured default.
 
 ## Stash Transfer When Forking
 

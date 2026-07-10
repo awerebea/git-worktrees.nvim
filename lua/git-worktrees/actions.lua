@@ -44,7 +44,8 @@ end
 ---config options. Falls back to a Snacks file picker when the file is absent.
 ---@param from_path string Absolute path of the old worktree root.
 ---@param to_path string Absolute path of the new worktree root.
-local function swap_current_buffer(from_path, to_path)
+---@param cmd_override? string Vim command to use instead of `switch_file_command`.
+local function swap_current_buffer(from_path, to_path, cmd_override)
   local config = require("git-worktrees").config
   if config.swap_current_buffer == false then
     return
@@ -66,7 +67,7 @@ local function swap_current_buffer(from_path, to_path)
 
   local function do_open()
     if vim.fn.filereadable(new_file) == 1 then
-      local cmd = config.switch_file_command
+      local cmd = cmd_override or config.switch_file_command
       if cmd then
         vim.cmd(cmd .. " " .. vim.fn.fnameescape(new_file))
       end
@@ -122,11 +123,80 @@ function M.worktree_switch_verbose(picker, item)
   end)
 end
 
+---Switch and open the current file with `edit` (ignores `switch_file_command`).
+---@param picker snacks.Picker
+---@param item GitWorktrees.Item
+function M.worktree_switch_edit(picker, item)
+  local snapshot = vim.deepcopy({
+    wt_path = item.wt_path,
+    display_path = item.display_path,
+    branch = item.branch,
+    ref = item.ref,
+    is_remote = item.is_remote,
+  })
+  picker:close()
+  vim.schedule(function()
+    M._do_switch(snapshot, false, "edit")
+  end)
+end
+
+---Switch and open the current file in a new tab (ignores `switch_file_command`).
+---@param picker snacks.Picker
+---@param item GitWorktrees.Item
+function M.worktree_switch_tabedit(picker, item)
+  local snapshot = vim.deepcopy({
+    wt_path = item.wt_path,
+    display_path = item.display_path,
+    branch = item.branch,
+    ref = item.ref,
+    is_remote = item.is_remote,
+  })
+  picker:close()
+  vim.schedule(function()
+    M._do_switch(snapshot, false, "tabedit")
+  end)
+end
+
+---Switch and open the current file in a vertical split (ignores `switch_file_command`).
+---@param picker snacks.Picker
+---@param item GitWorktrees.Item
+function M.worktree_switch_vsplit(picker, item)
+  local snapshot = vim.deepcopy({
+    wt_path = item.wt_path,
+    display_path = item.display_path,
+    branch = item.branch,
+    ref = item.ref,
+    is_remote = item.is_remote,
+  })
+  picker:close()
+  vim.schedule(function()
+    M._do_switch(snapshot, false, "vsplit")
+  end)
+end
+
+---Switch and open the current file in a horizontal split (ignores `switch_file_command`).
+---@param picker snacks.Picker
+---@param item GitWorktrees.Item
+function M.worktree_switch_split(picker, item)
+  local snapshot = vim.deepcopy({
+    wt_path = item.wt_path,
+    display_path = item.display_path,
+    branch = item.branch,
+    ref = item.ref,
+    is_remote = item.is_remote,
+  })
+  picker:close()
+  vim.schedule(function()
+    M._do_switch(snapshot, false, "split")
+  end)
+end
+
 ---Core switch implementation. If the item already has a worktree, cds into it.
 ---Otherwise delegates to `_create_worktree`.
 ---@param item GitWorktrees.Snapshot
 ---@param force_prompt boolean Always prompt for worktree path when true.
-function M._do_switch(item, force_prompt)
+---@param cmd_override? string Override for the file-open command (e.g. "vsplit").
+function M._do_switch(item, force_prompt, cmd_override)
   local from_path = vim.fn.getcwd()
 
   if item.wt_path then
@@ -138,11 +208,11 @@ function M._do_switch(item, force_prompt)
     vim.cmd("redrawstatus!")
     notify("Switched to worktree: " .. item.display_path, vim.log.levels.INFO)
     run_hook("on_switch", from_path, to_path)
-    swap_current_buffer(from_path, to_path)
+    swap_current_buffer(from_path, to_path, cmd_override)
     return
   end
 
-  M._create_worktree(item, force_prompt, function() end)
+  M._create_worktree(item, force_prompt, function() end, cmd_override)
 end
 
 ---Prompt for (or derive) a worktree path, run `git worktree add`, then switch.
@@ -151,7 +221,8 @@ end
 ---@param item GitWorktrees.Snapshot
 ---@param force_prompt boolean
 ---@param on_done fun(wt_path: string|nil)
-function M._create_worktree(item, force_prompt, on_done)
+---@param cmd_override? string Override for the file-open command (e.g. "vsplit").
+function M._create_worktree(item, force_prompt, on_done, cmd_override)
   local git = require("git-worktrees.git")
   local config = require("git-worktrees").config
   local fmt = require("git-worktrees.format")
@@ -199,7 +270,7 @@ function M._create_worktree(item, force_prompt, on_done)
     notify("Created worktree: " .. display .. " for '" .. branch_name .. "'", vim.log.levels.INFO)
     run_hook("on_add", branch_name, wt_path)
     run_hook("on_switch", from_path, wt_path)
-    swap_current_buffer(from_path, wt_path)
+    swap_current_buffer(from_path, wt_path, cmd_override)
     on_done(wt_path)
   end
 
