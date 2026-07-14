@@ -26,7 +26,7 @@
 ---@field author_format? "name"|"email" Author column field: "name" -> committername, "email" -> committeremail. (default: "name")
 ---@field swap_current_buffer? boolean|"ask" false: leave buffer; true: auto-swap; "ask": prompt. (default: false)
 ---@field switch_file_command? string|nil Vim command to open the swapped file. nil skips opening. (default: "edit")
----@field disable_default_keymaps? boolean Suppress the keymaps registered by setup(). (default: false)
+---@field enable_default_keymaps? boolean Register the built-in keymaps when setup() is called. (default: false)
 ---@field notify_timeout? integer|nil Timeout in ms for plugin notifications. nil uses the notification handler's own default. (default: nil)
 ---@field branch_info_timeout? integer Timeout in ms for the branch info popup opened by <C-o>. (default: 5000)
 ---@field status_win_timeout? integer Timeout in ms for the git-status popup shown before a force-delete. 0 = close manually. (default: 0)
@@ -49,7 +49,7 @@ M.config = {
   author_format = "name",
   swap_current_buffer = false,
   switch_file_command = "edit",
-  disable_default_keymaps = false,
+  enable_default_keymaps = false,
   notify_timeout = nil,
   branch_info_timeout = 5000,
   status_win_timeout = 0,
@@ -78,7 +78,7 @@ function M.setup(opts)
     M.branches()
   end, { desc = "Open branch management picker" })
 
-  if not M.config.disable_default_keymaps then
+  if M.config.enable_default_keymaps then
     vim.keymap.set("n", "<leader>gwt", function()
       M.worktrees()
     end, { desc = "Worktree total" })

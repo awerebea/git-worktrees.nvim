@@ -60,7 +60,8 @@ itself, but one of the hook examples in this README uses it.
   -- config = true also works here if you have no custom opts - lazy derives the
   -- module name ("git-worktrees") from the plugin dir name and calls .setup(opts).
   opts = {
-    disable_default_keymaps = true,   -- we manage keymaps above via keys = {}
+    -- enable_default_keymaps = false by default, so no built-in keymaps are
+    -- registered; the keys = {} table above covers all entry points.
     -- ...other overrides...
   },
   config = function(_, opts)
@@ -73,7 +74,7 @@ itself, but one of the hook examples in this README uses it.
 
 ```lua
 require("git-worktrees").setup({
-  -- disable_default_keymaps = false by default, so keymaps are registered here
+  enable_default_keymaps = true, -- opt in to the built-in keymaps
 })
 ```
 
@@ -137,9 +138,10 @@ require("git-worktrees").setup({
   -- "edit" | "tabedit" | "vsplit" | "split" | nil
   switch_file_command = "edit",
 
-  -- Suppress the keymaps registered by setup().
-  -- Set to true when you manage keymaps yourself (e.g. Lazy keys = {}).
-  disable_default_keymaps = false,
+  -- Register the built-in keymaps when setup() is called.
+  -- Defaults to false; set to true only when not managing keymaps via Lazy
+  -- keys = {} or explicit vim.keymap.set calls.
+  enable_default_keymaps = false,
 
   -- Timeout in ms for plugin notifications (vim.notify calls).
   -- nil means the notification handler uses its own default (e.g. 3 s in nvim-notify).
@@ -170,7 +172,7 @@ require("git-worktrees").setup({
 })
 ```
 
-## Default Keymaps (registered by setup when disable_default_keymaps = false)
+## Default Keymaps (registered by setup when enable_default_keymaps = true)
 
 | Key           | Action                                                        |
 | ------------- | ------------------------------------------------------------- |
