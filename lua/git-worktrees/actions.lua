@@ -37,6 +37,23 @@ local function worktree_root_of(cwd)
   return git.get_worktree_root(cwd) or cwd
 end
 
+---Number of screen rows `lines` occupy when soft-wrapped into `width` cells.
+---The popups set `wrap = true`, so a window sized to the number of logical lines cuts
+---off everything the wrapping pushes past the last row.
+---@param lines string[]
+---@param width integer Text width of the window, excluding the border.
+---@return integer
+local function wrapped_height(lines, width)
+  if width < 1 then
+    return #lines
+  end
+  local rows = 0
+  for _, line in ipairs(lines) do
+    rows = rows + math.max(1, math.ceil(vim.api.nvim_strwidth(line) / width))
+  end
+  return rows
+end
+
 ---Wrapper around vim.notify that applies the plugin-configured notification timeout.
 ---Pass an explicit timeout (ms) to override the global notify_timeout for that call.
 ---@param msg string
@@ -424,7 +441,7 @@ local function show_status_win(wt_path, title)
     position = "float",
     wo = { wrap = true },
     width = win_width,
-    height = math.min(#lines + 2, math.floor(vim.o.lines * 0.5)),
+    height = math.min(wrapped_height(lines, win_width), math.floor(vim.o.lines * 0.5)),
     row = has_tabline and 1 or 0,
     col = -1,
     zindex = 300,
@@ -978,7 +995,7 @@ function M.branch_info(picker, item) --luacheck: ignore picker
     position = "float",
     wo = { wrap = true },
     width = win_width,
-    height = math.min(#lines, math.floor(vim.o.lines * 0.5)),
+    height = math.min(wrapped_height(lines, win_width), math.floor(vim.o.lines * 0.5)),
     row = has_tabline and 1 or 0,
     col = -1,
     zindex = 300,
