@@ -63,6 +63,13 @@ local function swap_current_buffer(from_path, to_path, cmd_override)
     Snacks.picker.files({ cwd = to_path })
   end
 
+  -- Used when there is a current file but it has no counterpart in the new
+  -- worktree (as opposed to no current file at all, which needs no explanation).
+  local function open_picker_no_match()
+    notify("git-worktrees: no matching file in new worktree; browsing it instead", vim.log.levels.INFO)
+    open_picker()
+  end
+
   local cur_file = vim.api.nvim_buf_get_name(vim.api.nvim_get_current_buf())
   if cur_file == "" then
     if explicit then
@@ -75,7 +82,7 @@ local function swap_current_buffer(from_path, to_path, cmd_override)
   -- Guard against prefix-only matches (e.g. "/repo" must not match "/repo_other/...").
   if cur_file ~= from_norm and cur_file:sub(1, #from_norm + 1) ~= from_norm .. "/" then
     if explicit then
-      open_picker()
+      open_picker_no_match()
     end
     return
   end
@@ -90,7 +97,7 @@ local function swap_current_buffer(from_path, to_path, cmd_override)
         vim.cmd(cmd .. " " .. vim.fn.fnameescape(new_file))
       end
     else
-      open_picker()
+      open_picker_no_match()
     end
   end
 
