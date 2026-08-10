@@ -306,7 +306,7 @@ For bare repos named `<name>.git`, `{repo_name}` keeps the `.git` suffix and
 | <code>&lt;M&#8209;v&gt;</code> | worktree&nbsp;only    | Force path prompt even when `auto_worktree_path = true`                                                                                                                   |
 | <code>&lt;C&#8209;o&gt;</code> | worktree,&nbsp;branch | Show branch info notification (branch, ref, worktree, author, date, `HEAD`&nbsp;commit)                                                                                   |
 | <code>&lt;M&#8209;n&gt;</code> | worktree,branch       | Fork branch (worktree pickers: create branch + worktree; branch picker: branch only)                                                                                      |
-| <code>&lt;M&#8209;g&gt;</code> | worktree,branch       | Cycle branch type: local → remote → all → local                                                                                                                           |
+| <code>&lt;M&#8209;g&gt;</code> | worktree,branch       | Cycle branch type: local → remote → all → local, to reveal remote-only branches                                                                                           |
 
 The four file-open overrides (`<C-e>`, `<C-s>`, `<C-v>`, `<C-t>`) always switch to (or
 create) the worktree and then try to open a file, regardless of `swap_current_buffer` -
@@ -317,6 +317,15 @@ buffer is outside the worktree being left, or the equivalent file does not exist
 new worktree, they fall back to a file picker at the new worktree root instead of doing
 nothing. `<CR>` is the one key that respects `swap_current_buffer` (and, when it is
 `true` or `"ask"`, `switch_file_command`) as configured.
+
+`branch_type` defaults to `"local"`, so remote-tracking branches (e.g.
+`origin/feat/foo`) are hidden until you press `<M-g>` to switch to `"remote"` or
+`"all"`. Once visible, selecting a remote-only branch (`<CR>` or one of the file-open
+overrides) creates a worktree for it exactly like a local branch would - `git worktree
+add` recognises that `feat/foo` only exists as `origin/feat/foo` and automatically
+creates a new local branch tracking it, checked out into the new worktree. This is the
+fastest way to start working on a colleague's branch: cycle to `"remote"` or `"all"`,
+find the branch, press `<CR>`.
 
 ## Stash Transfer When Forking
 
