@@ -1,7 +1,10 @@
 ---@class GitWorktrees.WorktreeData
----@field git_root string Absolute path to the root worktree.
+---@field git_root string Absolute path to the main worktree (bare repos: the bare directory).
 ---@field git_common_dir string Absolute path to the git common directory (.git or bare root).
 ---@field is_bare boolean Whether the repository is a bare repo.
+---@field main_worktree_unknown boolean True when the main worktree's path could not be
+---determined. git_root then holds git's own unreliable answer, and the main worktree is
+---left out of wt_map rather than pointing a branch at the git directory.
 ---@field wt_map table<string, string> Map of full-ref -> absolute worktree path.
 ---Worktrees with a detached HEAD are absent from wt_map: they have no branch ref for a
 ---picker item to be keyed by.
@@ -40,6 +43,106 @@ function M.is_git_repo(cwd)
   return result.code == 0
 end
 
+---Resolve `path` against `cwd` when it is relative, then canonicalise it.
+---Symlinks are resolved because git reports canonical paths: keeping the same spelling is
+---what lets paths derived here be compared against `git worktree list` output when the
+---cwd was reached through a symlink.
+---@param path string
+---@param cwd string Directory a relative `path` is taken to be relative to.
+---@return string
+local function absolute(path, cwd)
+  if path:sub(1, 1) ~= "/" then
+    path = cwd:gsub("/$", "") .. "/" .. path
+  end
+  path = vim.fn.simplify(path)
+  return vim.uv.fs_realpath(path) or path
+end
+
+---Return the absolute git common directory for `cwd`, or nil when `cwd` is not in a repo.
+---
+---Asking git is the only reliable way to get this: the common directory is `<root>/.git`
+---only for ordinary repos, and an unrelated path for `--separate-git-dir` repos and
+---submodules. `--git-common-dir` answers relative to the cwd ("./.git", "../../.git", or
+---"." in a bare repo), so it is resolved here rather than using `--path-format=absolute`,
+---which would raise the required git version to 2.31 for no other gain.
+---@param cwd string
+---@return string|nil
+function M.get_common_dir(cwd)
+  local out = run({ "git", "rev-parse", "--git-common-dir" }, cwd)
+  if not out then
+    return nil
+  end
+  out = out:gsub("%s+$", "")
+  if out == "" then
+    return nil
+  end
+  return absolute(out, cwd)
+end
+
+---Return the superproject's working tree when `cwd` is inside a git submodule, else nil.
+---
+---Only an absolute answer is accepted: `git rev-parse` echoes options it does not
+---recognise straight back to stdout and still exits 0, so on a git older than 2.13 this
+---would otherwise report the option name itself and make every repo look like a submodule.
+---
+---Note that a *linked worktree* of a submodule reports nothing, so it is not detected as
+---one; creating such a worktree is already a deliberate act.
+---@param cwd string
+---@return string|nil
+function M.get_superproject_root(cwd)
+  local out = run({ "git", "rev-parse", "--show-superproject-working-tree" }, cwd)
+  if not out then
+    return nil
+  end
+  out = out:gsub("%s+$", "")
+  if out:sub(1, 1) ~= "/" then
+    return nil
+  end
+  return absolute(out, cwd)
+end
+
+---Work out the main worktree's path for a non-bare repo, or nil when it cannot be known.
+---
+---git derives this path by stripping a "/.git" suffix off the common directory, so
+---whenever that suffix is absent - `--separate-git-dir` repos and submodules - `git
+---worktree list` reports the git directory itself as the worktree path. Recover it from
+---core.worktree, which submodules set, and otherwise from the cwd's own toplevel. A
+---candidate that names a linked worktree is rejected: the main worktree is never one.
+---
+---Unrecoverable case: a `--separate-git-dir` repo viewed from one of its linked
+---worktrees. Nothing under the git directory records where the main worktree lives, so
+---git cannot answer either.
+---@param cwd string
+---@param git_common_dir string
+---@param reported string Path git reported for the main worktree.
+---@param is_linked table<string, boolean> Set of linked worktree paths.
+---@return string|nil
+local function resolve_main_worktree(cwd, git_common_dir, reported, is_linked)
+  -- Ordinary repo: git's strip round-trips exactly, so its answer is already correct.
+  if git_common_dir:sub(-5) == "/.git" then
+    return reported
+  end
+
+  local core_wt = run({ "git", "config", "core.worktree" }, cwd)
+  if core_wt then
+    core_wt = core_wt:gsub("%s+$", "")
+    -- core.worktree is stored relative to the git directory.
+    if core_wt ~= "" then
+      local path = absolute(core_wt, git_common_dir)
+      if not is_linked[path] then
+        return path
+      end
+    end
+  end
+
+  local top = M.get_worktree_root(cwd)
+  if top and not is_linked[top] then
+    return top
+  end
+
+  return nil
+end
+
 ---Parse `git worktree list --porcelain` and return structured worktree data.
 ---@param cwd string
 ---@return GitWorktrees.WorktreeData|nil data
@@ -57,8 +160,8 @@ function M.get_worktree_data(cwd)
   end
 
   local first_lines = vim.split(entries[1], "\n", { plain = true, trimempty = true })
-  local git_root = (first_lines[1] or ""):match("^worktree (.+)")
-  if not git_root then
+  local reported_main = (first_lines[1] or ""):match("^worktree (.+)")
+  if not reported_main then
     return nil, "could not parse git root"
   end
 
@@ -70,7 +173,38 @@ function M.get_worktree_data(cwd)
     end
   end
 
-  local git_common_dir = is_bare and git_root or (git_root .. "/.git")
+  local git_common_dir = M.get_common_dir(cwd)
+  if not git_common_dir then
+    return nil, "could not determine the git common directory"
+  end
+
+  -- Linked worktrees record their own path under the git directory, so unlike the main
+  -- worktree entry these paths are always what git says they are.
+  ---@type {path: string, lines: string[]}[]
+  local linked = {}
+  ---@type table<string, boolean>
+  local is_linked = {}
+  for i = 2, #entries do
+    local entry = entries[i]
+    if entry and entry:match("%S") then
+      local entry_lines = vim.split(entry, "\n", { plain = true, trimempty = true })
+      local path = (entry_lines[1] or ""):match("^worktree (.+)")
+      if path then
+        linked[#linked + 1] = { path = path, lines = entry_lines }
+        is_linked[path] = true
+      end
+    end
+  end
+
+  local git_root = git_common_dir
+  local main_worktree_unknown = false
+  if not is_bare then
+    git_root = resolve_main_worktree(cwd, git_common_dir, reported_main, is_linked)
+    if not git_root then
+      git_root = reported_main
+      main_worktree_unknown = true
+    end
+  end
 
   ---@type table<string, string>
   local wt_map = {}
@@ -87,26 +221,22 @@ function M.get_worktree_data(cwd)
     end
   end
 
-  -- Regular repos include the main worktree; bare repos do not have one.
-  if not is_bare then
+  -- Regular repos include the main worktree; bare repos do not have one. It is skipped
+  -- when its path is unknown: mapping a branch to git's answer would make switching to
+  -- that branch chdir into the git directory.
+  if not is_bare and not main_worktree_unknown then
     parse_entry(first_lines, git_root)
   end
 
-  for i = 2, #entries do
-    local entry = entries[i]
-    if entry and entry:match("%S") then
-      local entry_lines = vim.split(entry, "\n", { plain = true, trimempty = true })
-      local path = (entry_lines[1] or ""):match("^worktree (.+)")
-      if path then
-        parse_entry(entry_lines, path)
-      end
-    end
+  for _, entry in ipairs(linked) do
+    parse_entry(entry.lines, entry.path)
   end
 
   return {
     git_root = git_root,
     git_common_dir = git_common_dir,
     is_bare = is_bare,
+    main_worktree_unknown = main_worktree_unknown,
     wt_map = wt_map,
   }
 end

@@ -155,6 +155,15 @@ local function load_data(config)
     return nil, nil, nil, nil
   end
 
+  if wt_data.main_worktree_unknown then
+    notify(
+      "git-worktrees: cannot determine this repository's main worktree - git reports its\n"
+        .. "git directory instead. That worktree is left out of the list; every other one\n"
+        .. "is unaffected.",
+      vim.log.levels.WARN
+    )
+  end
+
   local tmpl = wt_data.is_bare and (config.wt_base_path_bare or "./wt") or (config.wt_base_path_regular or "./wt")
   local wt_base_path = git.expand_wt_base(tmpl, wt_data.git_common_dir, wt_data.git_root)
 
