@@ -8,6 +8,21 @@
 
 local M = {}
 
+---Return true when the editor's cwd is inside the worktree at `wt_path`.
+---
+---Used to refuse deleting the worktree currently in use. `item.is_current` cannot
+---answer this: it only means the branch is the repo's HEAD, which is also true for
+---the branch a bare repo's HEAD points at while the cwd is the bare directory
+---itself, and false for a worktree with a detached HEAD.
+---@param wt_path string Absolute path of the worktree to test.
+---@return boolean
+local function is_cwd_inside(wt_path)
+  local cwd = vim.fn.getcwd():gsub("/$", "")
+  local root = wt_path:gsub("/$", "")
+  -- Compare on a component boundary so "/repo/wt" does not match "/repo/wt_other".
+  return cwd == root or cwd:sub(1, #root + 1) == root .. "/"
+end
+
 ---Wrapper around vim.notify that applies the plugin-configured notification timeout.
 ---Pass an explicit timeout (ms) to override the global notify_timeout for that call.
 ---@param msg string
@@ -336,7 +351,6 @@ function M.worktree_delete(picker, item)
     display_path = item.display_path,
     branch = item.branch,
     is_remote = item.is_remote,
-    is_current = item.is_current,
   })
   picker:close()
   vim.schedule(function()
@@ -419,8 +433,8 @@ function M._do_worktree_delete(item)
     return
   end
 
-  if item.is_current then
-    notify("git-worktrees: cannot delete the current worktree", vim.log.levels.WARN)
+  if is_cwd_inside(item.wt_path) then
+    notify("git-worktrees: cannot delete the worktree you are in", vim.log.levels.WARN)
     return
   end
 
