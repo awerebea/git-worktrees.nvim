@@ -87,7 +87,7 @@ end
 ---Format an absolute path for display according to the given mode.
 ---@param abs_path string|nil
 ---@param mode GitWorktrees.PathDisplay
----@param git_common_dir? string Required for relative-gitdir, absolute-gitdir, and tilde-gitdir modes.
+---@param git_common_dir? string Required for relative-gitdir; used by relative-repo for bare repos.
 ---@param wt_base_path? string Required for relative-wt-base mode; the expanded worktree base directory.
 ---@param git_root? string Required for relative-repo mode; the root worktree path (equals git_common_dir for bare repos).
 ---@return string display path, or empty string when abs_path is nil/empty
@@ -118,14 +118,12 @@ function M.format_path(abs_path, mode, git_common_dir, wt_base_path, git_root)
     end
     return relative_to(abs_path, git_common_dir)
   elseif mode == "absolute-gitdir" then
-    if git_common_dir and abs_path:sub(1, #git_common_dir) == git_common_dir then
-      return git_common_dir .. "/" .. abs_path:sub(#git_common_dir + 2)
-    end
+    -- Re-joining git_common_dir with the remainder of a path under it reproduces that
+    -- path exactly, so this mode is the absolute path either way. Kept as its own mode
+    -- because it is a documented config value and pairs with tilde-gitdir.
     return abs_path
   elseif mode == "tilde-gitdir" then
-    if git_common_dir and abs_path:sub(1, #git_common_dir) == git_common_dir then
-      return M.tilde_path(git_common_dir) .. "/" .. abs_path:sub(#git_common_dir + 2)
-    end
+    -- Likewise: absolute-gitdir with the $HOME prefix replaced by "~".
     return M.tilde_path(abs_path)
   end
 

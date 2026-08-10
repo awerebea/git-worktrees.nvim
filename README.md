@@ -93,8 +93,9 @@ require("git-worktrees").setup({
   --                      (bare repos: same as relative-gitdir)
   -- "relative-wt-base" - relative to the configured worktree base path
   -- "relative-gitdir"  - relative to the git common dir (.git for non-bare)
-  -- "absolute-gitdir"  - absolute path prefixed with the git common dir
-  -- "tilde-gitdir"     - absolute-gitdir with ~ substitution applied
+  -- "absolute-gitdir"  - absolute path prefixed with the git common dir,
+  --                      which for worktrees under it is just "absolute"
+  -- "tilde-gitdir"     - absolute-gitdir with ~ substitution applied ("tilde")
   wt_path_display = "tilde",
 
   -- Base path template for new worktrees.

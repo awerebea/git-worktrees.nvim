@@ -12,8 +12,8 @@
 ---| "relative-repo"     # relative to the repo working tree (bare: same as relative-gitdir)
 ---| "relative-wt-base"  # relative to the configured worktree base path
 ---| "relative-gitdir"   # relative to the git common directory (.git for non-bare)
----| "absolute-gitdir"   # absolute path prefixed with the git common dir
----| "tilde-gitdir"      # absolute-gitdir with ~ substitution applied
+---| "absolute-gitdir"   # absolute path prefixed with the git common dir (same as "absolute")
+---| "tilde-gitdir"      # absolute-gitdir with ~ substitution applied (same as "tilde")
 
 ---@class GitWorktrees.Config
 ---@field wt_path_display? GitWorktrees.PathDisplay How worktree paths are displayed in the picker. (default: "tilde")
