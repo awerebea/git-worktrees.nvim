@@ -3,7 +3,8 @@
 ---@field git_common_dir string Absolute path to the git common directory (.git or bare root).
 ---@field is_bare boolean Whether the repository is a bare repo.
 ---@field wt_map table<string, string> Map of full-ref -> absolute worktree path.
----@field wt_branches string[] List of refs that currently have a checked-out worktree.
+---Worktrees with a detached HEAD are absent from wt_map: they have no branch ref for a
+---picker item to be keyed by.
 
 ---@class GitWorktrees.Branch
 ---@field ref string Full ref name (e.g. "refs/heads/main" or "refs/remotes/origin/feat").
@@ -73,33 +74,16 @@ function M.get_worktree_data(cwd)
 
   ---@type table<string, string>
   local wt_map = {}
-  ---@type string[]
-  local wt_branches = {}
 
   ---@param lines string[]
   ---@param path string
   local function parse_entry(lines, path)
-    local head_hash, ref, is_detached
     for _, line in ipairs(lines) do
-      local h = line:match("^HEAD (.+)")
-      if h then
-        head_hash = h
+      local ref = line:match("^branch (.+)")
+      if ref then
+        wt_map[ref] = path
+        return
       end
-      local b = line:match("^branch (.+)")
-      if b then
-        ref = b
-      end
-      if line == "detached" then
-        is_detached = true
-      end
-    end
-    if ref then
-      wt_map[ref] = path
-      table.insert(wt_branches, ref)
-    elseif is_detached and head_hash then
-      local dref = "detached/heads/" .. head_hash:sub(1, 7)
-      wt_map[dref] = path
-      table.insert(wt_branches, dref)
     end
   end
 
@@ -124,7 +108,6 @@ function M.get_worktree_data(cwd)
     git_common_dir = git_common_dir,
     is_bare = is_bare,
     wt_map = wt_map,
-    wt_branches = wt_branches,
   }
 end
 
