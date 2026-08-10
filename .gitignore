@@ -1,0 +1,16 @@
+# OS
+.DS_Store
+
+# Editor / Neovim swap and backup files
+*.swp
+*.swo
+*~
+.netrwhist
+
+# Generated Neovim help tags
+doc/tags
+
+# Lua tooling artifacts
+.luarocks/
+lua_modules/
+luacov.*.out
