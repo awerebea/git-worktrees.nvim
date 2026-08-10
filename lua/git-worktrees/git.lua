@@ -198,19 +198,21 @@ function M.get_current_branch(cwd)
 end
 
 ---Expand a worktree base path template.
----Supports {repo_name} and {repo_name_short} placeholders.
+---Supports {repo_name} and {repo_name_short} placeholders, derived from the repo's
+---working-tree root (bare repos: the bare directory itself, e.g. "my-project.git").
 ---Relative paths are anchored to `git_common_dir`.
 ---@param tmpl string
 ---@param git_common_dir string
+---@param git_root string
 ---@return string
-function M.expand_wt_base(tmpl, git_common_dir)
-  local repo_name = vim.fn.fnamemodify(git_common_dir, ":t")
+function M.expand_wt_base(tmpl, git_common_dir, git_root)
+  local repo_name = vim.fn.fnamemodify(git_root, ":t")
   local repo_name_short = repo_name:gsub("%.git$", "")
   local path = tmpl:gsub("{repo_name}", repo_name):gsub("{repo_name_short}", repo_name_short)
   if path:sub(1, 1) ~= "/" then
     path = git_common_dir .. "/" .. path:gsub("^%./", "")
   end
-  return path
+  return vim.fn.simplify(path)
 end
 
 ---Run `git worktree add <wt_path> <branch_name>`.

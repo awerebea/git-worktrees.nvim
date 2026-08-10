@@ -150,7 +150,7 @@ local function load_data(config)
   end
 
   local tmpl = wt_data.is_bare and (config.wt_base_path_bare or "./wt") or (config.wt_base_path_regular or "./wt")
-  local wt_base_path = git.expand_wt_base(tmpl, wt_data.git_common_dir)
+  local wt_base_path = git.expand_wt_base(tmpl, wt_data.git_common_dir, wt_data.git_root)
 
   local branch_type = config.branch_type or "local"
   local branches = git.get_branches(branch_type, cwd, config)

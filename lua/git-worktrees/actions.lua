@@ -236,7 +236,7 @@ function M._create_worktree(item, force_prompt, on_done, cmd_override)
   end
 
   local tmpl = wt_data.is_bare and config.wt_base_path_bare or config.wt_base_path_regular
-  local base_path = git.expand_wt_base(tmpl, wt_data.git_common_dir)
+  local base_path = git.expand_wt_base(tmpl, wt_data.git_common_dir, wt_data.git_root)
 
   local home = vim.env.HOME or ""
   local display_base = (home ~= "" and base_path:sub(1, #home) == home) and "~" .. base_path:sub(#home + 1) or base_path
