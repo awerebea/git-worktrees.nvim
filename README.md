@@ -127,12 +127,14 @@ require("git-worktrees").setup({
   -- "email" -> committeremail
   author_format = "name",
 
-  -- Buffer swap when switching worktrees.
+  -- Buffer swap when switching worktrees via <CR>.
   --   false - leave the current buffer unchanged
   --   true  - automatically open the equivalent file in the new worktree
   --   "ask" - prompt before switching
   -- When the equivalent file does not exist, a file picker opens at the new
-  -- worktree root instead.
+  -- worktree root instead. The <C-e>/<C-s>/<C-v>/<C-t> overrides always open a
+  -- file (or fall back to the picker) regardless of this setting - see
+  -- "In-picker Keybindings" below.
   swap_current_buffer = false,
 
   -- Vim command used to open the file when swap_current_buffer is true or "ask".
@@ -306,9 +308,15 @@ For bare repos named `<name>.git`, `{repo_name}` keeps the `.git` suffix and
 | <code>&lt;M&#8209;n&gt;</code> | worktree,branch       | Fork branch (worktree pickers: create branch + worktree; branch picker: branch only)                                                                                      |
 | <code>&lt;M&#8209;g&gt;</code> | worktree,branch       | Cycle branch type: local → remote → all → local                                                                                                                           |
 
-The four file-open overrides (`<C-e>`, `<C-s>`, `<C-v>`, `<C-t>`) only apply when
-`swap_current_buffer` is enabled. They override `switch_file_command` for that single
-action without changing the configured default.
+The four file-open overrides (`<C-e>`, `<C-s>`, `<C-v>`, `<C-t>`) always switch to (or
+create) the worktree and then try to open a file, regardless of `swap_current_buffer` -
+pressing one of them is itself an explicit request to open something, so they ignore
+`swap_current_buffer` entirely (no `"ask"` prompt either) and always use their own
+command instead of `switch_file_command`. If there is no current buffer, the current
+buffer is outside the worktree being left, or the equivalent file does not exist in the
+new worktree, they fall back to a file picker at the new worktree root instead of doing
+nothing. `<CR>` is the one key that respects `swap_current_buffer` (and, when it is
+`true` or `"ask"`, `switch_file_command`) as configured.
 
 ## Stash Transfer When Forking
 

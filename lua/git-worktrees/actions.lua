@@ -41,24 +41,42 @@ end
 
 ---Open the file in `to_path` that corresponds to the currently open buffer in
 ---`from_path`, respecting the `swap_current_buffer` and `switch_file_command`
----config options. Falls back to a Snacks file picker when the file is absent.
+---config options. Falls back to a Snacks file picker when the equivalent file is
+---absent, there is no current buffer, or the current buffer is outside `from_path`.
+---
+---When `cmd_override` is set (the `<C-e>`/`<C-s>`/`<C-v>`/`<C-t>` overrides), the
+---open-or-fallback-to-picker behaviour always applies, ignoring `swap_current_buffer`
+---and skipping the `"ask"` confirmation: pressing one of those keys is itself an
+---explicit request to open something in the new worktree.
 ---@param from_path string Absolute path of the old worktree root.
 ---@param to_path string Absolute path of the new worktree root.
 ---@param cmd_override? string Vim command to use instead of `switch_file_command`.
 local function swap_current_buffer(from_path, to_path, cmd_override)
   local config = require("git-worktrees").config
-  if config.swap_current_buffer == false then
+  local explicit = cmd_override ~= nil
+
+  if not explicit and config.swap_current_buffer == false then
     return
+  end
+
+  local function open_picker()
+    Snacks.picker.files({ cwd = to_path })
   end
 
   local cur_file = vim.api.nvim_buf_get_name(vim.api.nvim_get_current_buf())
   if cur_file == "" then
+    if explicit then
+      open_picker()
+    end
     return
   end
 
   local from_norm = from_path:gsub("/$", "")
   -- Guard against prefix-only matches (e.g. "/repo" must not match "/repo_other/...").
   if cur_file ~= from_norm and cur_file:sub(1, #from_norm + 1) ~= from_norm .. "/" then
+    if explicit then
+      open_picker()
+    end
     return
   end
 
@@ -72,11 +90,13 @@ local function swap_current_buffer(from_path, to_path, cmd_override)
         vim.cmd(cmd .. " " .. vim.fn.fnameescape(new_file))
       end
     else
-      Snacks.picker.files({ cwd = to_path })
+      open_picker()
     end
   end
 
-  if config.swap_current_buffer == true then
+  if explicit then
+    do_open()
+  elseif config.swap_current_buffer == true then
     do_open()
   elseif config.swap_current_buffer == "ask" then
     local choice = vim.fn.confirm("Open equivalent file in new worktree?\n" .. new_file, "&Yes\n&No", 1)
