@@ -11,6 +11,26 @@
 
 local M = {}
 
+---Replace a leading `$HOME` in `abs_path` with `~`.
+---The match is anchored to a path-component boundary, so with `HOME=/Users/andrei`
+---the sibling `/Users/andreibulgakov/proj` is returned unchanged instead of becoming
+---the nonsensical `~bulgakov/proj`.
+---@param abs_path string
+---@return string
+function M.tilde_path(abs_path)
+  local home = (vim.env.HOME or ""):gsub("/$", "")
+  if home == "" then
+    return abs_path
+  end
+  if abs_path == home then
+    return "~"
+  end
+  if abs_path:sub(1, #home + 1) == home .. "/" then
+    return "~" .. abs_path:sub(#home + 1)
+  end
+  return abs_path
+end
+
 ---Compute the path of `abs_path` relative to `base`.
 ---Both arguments must be absolute paths.
 ---Returns paths with a "./" prefix (e.g. "./wt/branch") or ".." segments.
@@ -76,15 +96,11 @@ function M.format_path(abs_path, mode, git_common_dir, wt_base_path, git_root)
     return ""
   end
   mode = mode or "tilde"
-  local home = vim.env.HOME or ""
 
   if mode == "absolute" then
     return abs_path
   elseif mode == "tilde" then
-    if home ~= "" and abs_path:sub(1, #home) == home then
-      return "~" .. abs_path:sub(#home + 1)
-    end
-    return abs_path
+    return M.tilde_path(abs_path)
   elseif mode == "relative-cwd" then
     return vim.fn.fnamemodify(abs_path, ":.")
   elseif mode == "relative-home" then
@@ -108,23 +124,13 @@ function M.format_path(abs_path, mode, git_common_dir, wt_base_path, git_root)
     return abs_path
   elseif mode == "tilde-gitdir" then
     if git_common_dir and abs_path:sub(1, #git_common_dir) == git_common_dir then
-      local gcd = git_common_dir
-      if home ~= "" and gcd:sub(1, #home) == home then
-        gcd = "~" .. gcd:sub(#home + 1)
-      end
-      return gcd .. "/" .. abs_path:sub(#git_common_dir + 2)
+      return M.tilde_path(git_common_dir) .. "/" .. abs_path:sub(#git_common_dir + 2)
     end
-    if home ~= "" and abs_path:sub(1, #home) == home then
-      return "~" .. abs_path:sub(#home + 1)
-    end
-    return abs_path
+    return M.tilde_path(abs_path)
   end
 
   -- fallback: tilde mode
-  if home ~= "" and abs_path:sub(1, #home) == home then
-    return "~" .. abs_path:sub(#home + 1)
-  end
-  return abs_path
+  return M.tilde_path(abs_path)
 end
 
 ---Build picker items by joining branch data with worktree data.
