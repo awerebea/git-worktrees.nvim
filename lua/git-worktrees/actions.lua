@@ -603,6 +603,10 @@ function M._do_branch_delete_extended(item)
   end
 
   -- Local branch: delete first (force fallback if unmerged), then offer remote.
+  -- The upstream must be read before the delete: once refs/heads/<branch> is gone,
+  -- `git for-each-ref` reports no upstream and the remote prompt would never appear.
+  local upstream = git.get_branch_upstream(item.branch, cwd)
+
   local ok, err = git.branch_delete(item.branch, false)
   if not ok then
     if err == "unmerged" then
@@ -628,7 +632,6 @@ function M._do_branch_delete_extended(item)
     notify("Deleted branch: " .. item.branch, vim.log.levels.INFO)
   end
 
-  local upstream = git.get_branch_upstream(item.branch, cwd)
   if upstream then
     local remote = upstream:match("^([^/]+)/")
     local branch_name = upstream:match("[^/]+/(.+)")
