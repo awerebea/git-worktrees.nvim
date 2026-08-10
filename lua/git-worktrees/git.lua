@@ -200,7 +200,8 @@ end
 ---Expand a worktree base path template.
 ---Supports {repo_name} and {repo_name_short} placeholders, derived from the repo's
 ---working-tree root (bare repos: the bare directory itself, e.g. "my-project.git").
----Relative paths are anchored to `git_common_dir`.
+---A leading "~" or an environment variable is expanded first; what remains is
+---absolute when it starts with "/" and anchored to `git_common_dir` otherwise.
 ---@param tmpl string
 ---@param git_common_dir string
 ---@param git_root string
@@ -215,6 +216,13 @@ function M.expand_wt_base(tmpl, git_common_dir, git_root)
     return (s:gsub("%%", "%%%%"))
   end
   local path = tmpl:gsub("{repo_name}", repl(repo_name)):gsub("{repo_name_short}", repl(repo_name_short))
+  -- Expand "~" and "$VAR" before deciding whether the template is absolute; without
+  -- this a natural "~/worktrees" was treated as relative and anchored, producing a
+  -- literal "~" directory under the git common dir. Unlike vim.fn.expand(), normalize
+  -- leaves "%" alone, so it is safe to run after the placeholder substitution above.
+  if path:sub(1, 1) == "~" or path:find("%$") then
+    path = vim.fs.normalize(path)
+  end
   if path:sub(1, 1) ~= "/" then
     path = git_common_dir .. "/" .. path:gsub("^%./", "")
   end

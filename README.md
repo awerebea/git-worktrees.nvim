@@ -98,7 +98,8 @@ require("git-worktrees").setup({
   wt_path_display = "tilde",
 
   -- Base path template for new worktrees.
-  -- Relative paths are anchored to the git common directory.
+  -- A leading ~ and $ENV_VARS are expanded; relative paths are anchored to the
+  -- git common directory.
   -- Supports {repo_name} and {repo_name_short} placeholders.
   -- See "Worktree Base Path Examples" below for concrete examples and how
   -- the resulting paths are shown in the picker.
@@ -202,6 +203,14 @@ Picker paths use the default `wt_path_display = "tilde"` unless noted otherwise.
 
 Picker (`tilde`): `/Volumes/Work/worktrees/feat/foo` - unchanged, since it is not
 under `$HOME`.
+
+**`~` and environment variables** are expanded before the path is classified, so a
+template that starts with either is absolute too:
+
+| `wt_base_path_bare`  | New worktree path             |
+| -------------------- | ----------------------------- |
+| `~/Work/worktrees`   | `~/Work/worktrees/feat/foo`   |
+| `$WORKTREES/my-repo` | `$WORKTREES/my-repo/feat/foo` |
 
 **Relative paths** are resolved against `git_common_dir`: the bare directory itself
 for bare repos, or `<repo-root>/.git` for regular repos. The default `./wt` therefore
