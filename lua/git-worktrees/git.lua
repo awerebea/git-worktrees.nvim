@@ -208,7 +208,13 @@ end
 function M.expand_wt_base(tmpl, git_common_dir, git_root)
   local repo_name = vim.fn.fnamemodify(git_root, ":t")
   local repo_name_short = repo_name:gsub("%.git$", "")
-  local path = tmpl:gsub("{repo_name}", repo_name):gsub("{repo_name_short}", repo_name_short)
+  -- Escape "%" in the substituted names: gsub treats it as an escape character in the
+  -- replacement string, so a repo named "a%1b" would otherwise expand to the matched
+  -- placeholder itself and "y%z" would lose the "%z" entirely.
+  local function repl(s)
+    return (s:gsub("%%", "%%%%"))
+  end
+  local path = tmpl:gsub("{repo_name}", repl(repo_name)):gsub("{repo_name_short}", repl(repo_name_short))
   if path:sub(1, 1) ~= "/" then
     path = git_common_dir .. "/" .. path:gsub("^%./", "")
   end
