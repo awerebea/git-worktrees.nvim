@@ -34,7 +34,8 @@ end
 ---Compute the path of `abs_path` relative to `base`.
 ---Both arguments must be absolute paths.
 ---Returns paths with a "./" prefix (e.g. "./wt/branch") or ".." segments.
----Bare "." is returned as "./" and bare ".." as "../" for visual clarity.
+---A result that is only "." or ".." segments gets a trailing slash for visual
+---clarity, so "." reads as "./" and "../.." as "../../".
 ---@param abs_path string
 ---@param base string
 ---@return string
@@ -77,9 +78,11 @@ local function relative_to(abs_path, base)
   end
   local rel = table.concat(result, "/")
   if result[1] ~= ".." then
-    rel = "./" .. rel
-  elseif rel == ".." then
-    rel = "../"
+    return "./" .. rel
+  end
+  -- Only ".." segments: no trailing name to make it read as a directory, so add a slash.
+  if #tp == common then
+    rel = rel .. "/"
   end
   return rel
 end
