@@ -506,7 +506,7 @@ function M._do_worktree_delete(item)
   if not item.is_remote then
     local bc = vim.fn.confirm("Also delete branch '" .. item.branch .. "'?", "&Yes\n&No", 2)
     if bc == 1 then
-      M._do_branch_delete(item)
+      M._do_branch_delete(item, true)
     end
   end
 end
@@ -561,9 +561,24 @@ function M._do_worktree_delete_extended(item)
   M._do_branch_delete_extended(item)
 end
 
+---Ask before deleting a local branch.
+---Skipped when `assume_confirmed` is set, i.e. the caller already asked about this exact
+---branch via one of the "Also delete ..." follow-up prompts, so no path double-prompts.
+---@param branch string
+---@param assume_confirmed? boolean
+---@return boolean approved
+local function confirm_local_branch_delete(branch, assume_confirmed)
+  if assume_confirmed then
+    return true
+  end
+  return vim.fn.confirm("Delete local branch '" .. branch .. "'?", "&Yes\n&No", 2) == 1
+end
+
 ---Delete a branch. Remote: `git push <remote> --delete <branch>`. Local: `git branch -d/-D`.
+---Both paths confirm first; the remote path also names the remote it pushes the deletion to.
 ---@param item GitWorktrees.Snapshot
-function M._do_branch_delete(item)
+---@param assume_confirmed? boolean Caller already confirmed deleting this local branch.
+function M._do_branch_delete(item, assume_confirmed)
   local git = require("git-worktrees.git")
   local cwd = vim.fn.getcwd()
 
@@ -585,6 +600,10 @@ function M._do_branch_delete(item)
     else
       notify("git-worktrees: " .. (err or "failed"), vim.log.levels.ERROR)
     end
+    return
+  end
+
+  if not confirm_local_branch_delete(item.branch, assume_confirmed) then
     return
   end
 
@@ -616,7 +635,8 @@ end
 --- - Remote selected: delete remote first, then prompt to delete local counterpart.
 --- - Local selected: delete local first (force fallback for unmerged), then prompt to delete remote.
 ---@param item GitWorktrees.Snapshot
-function M._do_branch_delete_extended(item)
+---@param assume_confirmed? boolean Caller already confirmed deleting this local branch.
+function M._do_branch_delete_extended(item, assume_confirmed)
   local git = require("git-worktrees.git")
   local cwd = vim.fn.getcwd()
 
@@ -641,13 +661,17 @@ function M._do_branch_delete_extended(item)
     if git.local_branch_exists(branch_name, cwd) then
       local lc = vim.fn.confirm("Also delete local branch '" .. branch_name .. "'?", "&Yes\n&No", 2)
       if lc == 1 then
-        M._do_branch_delete({ branch = branch_name, is_remote = false })
+        M._do_branch_delete({ branch = branch_name, is_remote = false }, true)
       end
     end
     return
   end
 
   -- Local branch: delete first (force fallback if unmerged), then offer remote.
+  if not confirm_local_branch_delete(item.branch, assume_confirmed) then
+    return
+  end
+
   -- The upstream must be read before the delete: once refs/heads/<branch> is gone,
   -- `git for-each-ref` reports no upstream and the remote prompt would never appear.
   local upstream = git.get_branch_upstream(item.branch, cwd)

@@ -24,6 +24,7 @@ Inspired by and built on the shoulders of:
 - **Branch manage** - switch, delete (local or remote), or fork any local/remote branch (no worktree operations)
 - Simple delete (`<C-x>`): deletes only the selected branch type (local-only or remote-only)
 - Extended delete (`<M-x>`): deletes the selected side first, then prompts to also remove the counterpart
+- Every destructive step confirms first, defaulting to "No"
 - Adaptive column layout (branch | path/flag | author | date) that collapses gracefully on narrow screens
 - Live branch-type cycling (`<M-g>`) between local / remote / all without leaving the picker
 - Optional buffer swap when switching worktrees
@@ -329,6 +330,14 @@ buffer is outside the worktree being left, or the equivalent file does not exist
 new worktree, they fall back to a file picker at the new worktree root instead of doing
 nothing. `<CR>` is the one key that respects `swap_current_buffer` (and, when it is
 `true` or `"ask"`, `switch_file_command`) as configured.
+
+Every step that removes something asks first, and each prompt defaults to `No`, so a
+stray `<C-x>` cannot destroy anything. Deleting a worktree and deleting its branch are
+separate questions, which is what makes `<C-x>` and `<M-x>` distinguishable in the
+worktree pickers: `<C-x>` asks about the worktree and then offers the branch, while
+`<M-x>` asks about the worktree, the local branch and the remote branch in turn. You can
+answer `No` at any point and everything after it is skipped; anything already removed
+stays removed.
 
 `branch_type` defaults to `"local"`, so remote-tracking branches (e.g.
 `origin/feat/foo`) are hidden until you press `<M-g>` to switch to `"remote"` or
