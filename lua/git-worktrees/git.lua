@@ -186,6 +186,19 @@ function M.get_branches(branch_type, cwd, opts)
   return branches
 end
 
+---Return the absolute root of the worktree containing `cwd`.
+---Returns nil when `cwd` has no working tree, e.g. a bare repository directory.
+---@param cwd string
+---@return string|nil
+function M.get_worktree_root(cwd)
+  local out = run({ "git", "rev-parse", "--show-toplevel" }, cwd)
+  if not out then
+    return nil
+  end
+  out = out:gsub("%s+$", "")
+  return out ~= "" and out or nil
+end
+
 ---Return the current HEAD ref (e.g. "refs/heads/main"), or nil for a detached HEAD.
 ---@param cwd string
 ---@return string|nil

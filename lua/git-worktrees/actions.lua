@@ -22,6 +22,21 @@ local function is_cwd_inside(wt_path)
   return cwd == root or cwd:sub(1, #root + 1) == root .. "/"
 end
 
+---Return the root of the worktree the editor is leaving.
+---
+---The buffer swap maps a path relative to the old worktree root onto the new one, and
+---`to_path` is always a root, so the outgoing side has to be a root too. The cwd is not
+---necessarily one: with nvim started in `<wt>/src`, measuring from the cwd would map
+---`<wt>/src/foo.lua` to `<new_wt>/foo.lua` and would treat every buffer outside `src`
+---as living outside the worktree. Falls back to `cwd` when it has no working tree,
+---e.g. a bare repository directory.
+---@param cwd string
+---@return string
+local function worktree_root_of(cwd)
+  local git = require("git-worktrees.git")
+  return git.get_worktree_root(cwd) or cwd
+end
+
 ---Wrapper around vim.notify that applies the plugin-configured notification timeout.
 ---Pass an explicit timeout (ms) to override the global notify_timeout for that call.
 ---@param msg string
@@ -249,7 +264,7 @@ function M._do_switch(item, force_prompt, cmd_override)
     vim.cmd("redrawstatus!")
     notify("Switched to worktree: " .. item.display_path, vim.log.levels.INFO)
     run_hook("on_switch", from_path, to_path)
-    swap_current_buffer(from_path, to_path, cmd_override)
+    swap_current_buffer(worktree_root_of(from_path), to_path, cmd_override)
     return
   end
 
@@ -317,7 +332,7 @@ function M._create_worktree(item, force_prompt, on_done, cmd_override)
     notify("Created worktree: " .. display .. " for '" .. branch_name .. "'", vim.log.levels.INFO)
     run_hook("on_add", branch_name, wt_path)
     run_hook("on_switch", from_path, wt_path)
-    swap_current_buffer(from_path, wt_path, cmd_override)
+    swap_current_buffer(worktree_root_of(from_path), wt_path, cmd_override)
     on_done(wt_path)
   end
 
