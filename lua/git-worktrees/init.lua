@@ -61,7 +61,7 @@ M.config = {
 function M.setup(opts)
   M.config = vim.tbl_deep_extend("force", M.config, opts or {})
 
-  -- User commands are always registered regardless of disable_default_keymaps.
+  -- User commands are always registered regardless of enable_default_keymaps.
   vim.api.nvim_create_user_command("GitWorktreeTotal", function()
     M.worktrees()
   end, { desc = "Open worktree total picker" })

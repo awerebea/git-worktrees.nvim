@@ -10,6 +10,8 @@
 ---@field show_author boolean Show the author column.
 ---@field show_date boolean Show the date column.
 
+local notify = require("git-worktrees.util").notify
+
 local M = {}
 
 ---@type GitWorktrees.BranchType[]
@@ -143,13 +145,13 @@ local function load_data(config)
   local cwd = vim.fn.getcwd()
 
   if not git.is_git_repo(cwd) then
-    vim.notify("git-worktrees: not inside a git repository", vim.log.levels.ERROR)
+    notify("git-worktrees: not inside a git repository", vim.log.levels.ERROR)
     return nil, nil, nil, nil
   end
 
   local wt_data, err = git.get_worktree_data(cwd)
   if not wt_data then
-    vim.notify("git-worktrees: failed to read worktrees: " .. (err or ""), vim.log.levels.ERROR)
+    notify("git-worktrees: failed to read worktrees: " .. (err or ""), vim.log.levels.ERROR)
     return nil, nil, nil, nil
   end
 

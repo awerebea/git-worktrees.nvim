@@ -5,6 +5,8 @@
 ---@field ref string
 ---@field is_remote boolean
 
+local notify = require("git-worktrees.util").notify
+
 local M = {}
 
 ---Return true when the editor's cwd is inside the worktree at `wt_path`.
@@ -54,16 +56,6 @@ local function wrapped_height(lines, width)
   return rows
 end
 
----Wrapper around vim.notify that applies the plugin-configured notification timeout.
----Pass an explicit timeout (ms) to override the global notify_timeout for that call.
----@param msg string
----@param level integer vim.log.levels constant.
----@param timeout? integer|nil Override timeout in ms; nil falls back to notify_timeout config.
-local function notify(msg, level, timeout)
-  local config = require("git-worktrees").config
-  local t = timeout ~= nil and timeout or config.notify_timeout
-  vim.notify(msg, level, t ~= nil and { timeout = t } or nil)
-end
 
 ---Invoke a lifecycle hook by name, forwarding all extra arguments.
 ---Returns the hook's return value so callers can react (e.g. before_switch
