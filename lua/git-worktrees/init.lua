@@ -25,7 +25,7 @@
 ---@field date_format? string committerdate:<format> suffix for the date column. (default: "relative")
 ---@field author_format? "name"|"email" Author column field: "name" -> committername, "email" -> committeremail. (default: "name")
 ---@field swap_current_buffer? boolean|"ask" false: leave buffer; true: auto-swap; "ask": prompt. (default: false)
----@field switch_file_command? string|nil Vim command to open the swapped file. nil skips opening. (default: "edit")
+---@field switch_file_command? string|false Vim command to open the swapped file. false or "" skips opening. (default: "edit")
 ---@field enable_default_keymaps? boolean Register the built-in keymaps when setup() is called. (default: false)
 ---@field notify_timeout? integer|nil Timeout in ms for plugin notifications. nil uses the notification handler's own default. (default: nil)
 ---@field branch_info_timeout? integer Timeout in ms for the branch info popup opened by <C-o>. (default: 5000)

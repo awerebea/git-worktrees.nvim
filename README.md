@@ -140,8 +140,10 @@ require("git-worktrees").setup({
   swap_current_buffer = false,
 
   -- Vim command used to open the file when swap_current_buffer is true or "ask".
-  -- nil - only change cwd, do not open any file.
-  -- "edit" | "tabedit" | "vsplit" | "split" | nil
+  -- false (or "") - only change cwd, do not open any file. Note that nil cannot be
+  -- used for this: a nil value in the table passed to setup() leaves the default in
+  -- place rather than clearing it.
+  -- "edit" | "tabedit" | "vsplit" | "split" | false
   switch_file_command = "edit",
 
   -- Register the built-in keymaps when setup() is called.

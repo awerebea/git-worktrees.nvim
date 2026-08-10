@@ -139,7 +139,10 @@ local function swap_current_buffer(from_path, to_path, cmd_override)
   local function do_open()
     if vim.fn.filereadable(new_file) == 1 then
       local cmd = cmd_override or config.switch_file_command
-      if cmd then
+      -- `false` and `""` disable opening as well as nil: a nil in the user's setup()
+      -- table cannot override the "edit" default, since vim.tbl_deep_extend has no way
+      -- to represent an absent key.
+      if cmd and cmd ~= "" then
         vim.cmd(cmd .. " " .. vim.fn.fnameescape(new_file))
       end
     else
