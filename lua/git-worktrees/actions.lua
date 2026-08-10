@@ -4,7 +4,6 @@
 ---@field branch string
 ---@field ref string
 ---@field is_remote boolean
----@field is_current? boolean
 
 local M = {}
 
@@ -368,7 +367,6 @@ function M.worktree_delete_extended(picker, item)
     display_path = item.display_path,
     branch = item.branch,
     is_remote = item.is_remote,
-    is_current = item.is_current,
   })
   picker:close()
   vim.schedule(function()
@@ -485,12 +483,12 @@ end
 function M._do_worktree_delete_extended(item)
   local git = require("git-worktrees.git")
 
-  if item.is_current then
-    notify("git-worktrees: cannot delete the current worktree", vim.log.levels.WARN)
-    return
-  end
-
   if item.wt_path then
+    if is_cwd_inside(item.wt_path) then
+      notify("git-worktrees: cannot delete the worktree you are in", vim.log.levels.WARN)
+      return
+    end
+
     local choice = vim.fn.confirm(
       "Delete worktree: " .. item.display_path .. "\nfor branch '" .. item.branch .. "'?",
       "&Yes\n&No",
