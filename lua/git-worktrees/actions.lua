@@ -241,16 +241,16 @@ function M._create_worktree(item, force_prompt, on_done, cmd_override)
   local home = vim.env.HOME or ""
   local display_base = (home ~= "" and base_path:sub(1, #home) == home) and "~" .. base_path:sub(#home + 1) or base_path
 
-  -- Replace slashes in the branch name so it is safe as a directory component.
-  local branch_safe = item.branch:gsub("/", "-")
+  -- Remote branch: derive a local name by stripping the remote prefix.
+  -- Slashes in the branch name (e.g. "feat/foo") are kept, so the default
+  -- worktree path nests under <base_path> the same way the branch name does.
+  local branch_name = item.branch
+  if item.is_remote then
+    branch_name = branch_name:match("[^/]+/(.+)") or branch_name
+  end
+  local branch_safe = branch_name
 
   local function _finish(wt_path)
-    -- Remote branch: derive a local name by stripping the remote prefix.
-    local branch_name = item.branch
-    if item.is_remote then
-      branch_name = branch_name:match("[^/]+/(.+)") or branch_name
-    end
-
     local from_path = vim.fn.getcwd()
     if run_hook("before_switch", from_path, wt_path) == false then
       on_done(nil)
