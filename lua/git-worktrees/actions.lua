@@ -56,7 +56,6 @@ local function wrapped_height(lines, width)
   return rows
 end
 
-
 ---Invoke a lifecycle hook by name, forwarding all extra arguments.
 ---Returns the hook's return value so callers can react (e.g. before_switch
 ---returning false aborts the operation).
