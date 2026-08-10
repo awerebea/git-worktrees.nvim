@@ -100,6 +100,8 @@ require("git-worktrees").setup({
   -- Base path template for new worktrees.
   -- Relative paths are anchored to the git common directory.
   -- Supports {repo_name} and {repo_name_short} placeholders.
+  -- See "Worktree Base Path Examples" below for concrete examples and how
+  -- the resulting paths are shown in the picker.
   wt_base_path_bare    = "./wt",
   wt_base_path_regular = "./wt",
 
@@ -172,6 +174,104 @@ require("git-worktrees").setup({
 })
 ```
 
+## Worktree Base Path Examples
+
+`wt_base_path_bare` and `wt_base_path_regular` control where `git worktree add`
+creates new worktrees, and (via `wt_path_display`) how those paths are shown in the
+picker. A new worktree is created at `<base_path>/<branch_name>` by default, so a
+branch named `feat/foo` nests under `<base_path>/feat/foo`; `auto_worktree_path =
+false` (the default) pre-fills this path into an editable prompt instead of using it
+immediately.
+
+All examples below use the same repo - a bare repo used as a worktree hub - and a
+branch named `feat/foo`:
+
+```text
+~/Work/my-repo.git   (bare repo; git_common_dir == git_root)
+```
+
+Picker paths use the default `wt_path_display = "tilde"` unless noted otherwise.
+
+**Absolute paths** are used as-is, regardless of where the repo lives:
+
+| `wt_base_path_bare`       | New worktree path                  |
+| ------------------------- | ---------------------------------- |
+| `/Volumes/Work/worktrees` | `/Volumes/Work/worktrees/feat/foo` |
+
+Picker (`tilde`): `/Volumes/Work/worktrees/feat/foo` - unchanged, since it is not
+under `$HOME`.
+
+**Relative paths** are resolved against `git_common_dir`: the bare directory itself
+for bare repos, or `<repo-root>/.git` for regular repos. The default `./wt` therefore
+creates worktrees _inside_ the bare directory (bare repos) or inside `.git/` (regular
+repos). For a regular clone of the same project at `~/Work/my-repo`:
+
+| Config                          | Repo type | New worktree path                 |
+| ------------------------------- | --------- | --------------------------------- |
+| `wt_base_path_bare = "./wt"`    | bare      | `~/Work/my-repo.git/wt/feat/foo`  |
+| `wt_base_path_regular = "./wt"` | regular   | `~/Work/my-repo/.git/wt/feat/foo` |
+
+Picker (`tilde`): `~/Work/my-repo.git/wt/feat/foo` (bare) /
+`~/Work/my-repo/.git/wt/feat/foo` (regular)
+
+For regular repos, keeping worktrees under `.git/` (the default) is safe: `.git` is
+never scanned by `git status` in the main worktree, so nested worktrees do not show up
+as untracked files there. If you would rather keep worktrees outside `.git/` entirely,
+e.g. to group several repos' worktrees under one shared directory, or to make them
+visible to tools that do not expect a worktree inside another repo's `.git`, anchor
+them next to the repo instead:
+
+```lua
+wt_base_path_regular = "../../worktrees/{repo_name}",
+```
+
+`git_common_dir` for a regular repo is one level deeper than for a bare repo (it is
+`.git` _inside_ the working tree), so it takes two `..` to reach the same parent
+directory a bare repo's `..` would reach in one step. `{repo_name}` (see below) here
+expands to `my-repo`, keeping every repo's worktrees grouped under
+`worktrees/<repo_name>`, alongside (not inside) the repo:
+
+Picker (`tilde`): `~/Work/worktrees/my-repo/feat/foo`
+
+**Relative paths outside the repository** use `..` segments to escape the anchor
+directory; the resulting path is simplified, so no leftover `..` segments appear:
+
+| Config                               | New worktree path           |
+| ------------------------------------ | --------------------------- |
+| `wt_base_path_bare = "../worktrees"` | `~/Work/worktrees/feat/foo` |
+
+Picker (`tilde`): `~/Work/worktrees/feat/foo`
+Picker (`relative-wt-base`): `./feat/foo`
+
+`relative-wt-base` is often the more readable choice once worktrees live outside the
+repo: every entry is shown relative to the shared base directory instead of repeating
+the full path.
+
+**`{repo_name}` placeholder** expands to the tail of the repo's working-tree root
+directory name (for bare repos, the bare directory's own name, e.g. `my-repo.git`):
+
+| Config                                           | New worktree path                       |
+| ------------------------------------------------ | --------------------------------------- |
+| `wt_base_path_bare = "../worktrees/{repo_name}"` | `~/Work/worktrees/my-repo.git/feat/foo` |
+
+Picker (`tilde`): `~/Work/worktrees/my-repo.git/feat/foo`
+
+This is useful when several repos share one `worktrees` directory: each repo gets its
+own subdirectory named after it.
+
+**`{repo_name_short}` placeholder** is `{repo_name}` with a trailing `.git` suffix
+stripped:
+
+| Config                                                 | New worktree path                   |
+| ------------------------------------------------------ | ----------------------------------- |
+| `wt_base_path_bare = "../worktrees/{repo_name_short}"` | `~/Work/worktrees/my-repo/feat/foo` |
+
+Picker (`tilde`): `~/Work/worktrees/my-repo/feat/foo`
+
+For bare repos named `<name>.git`, `{repo_name}` keeps the `.git` suffix and
+`{repo_name_short}` drops it. Regular repos' working-tree directories rarely end in
+`.git`, so the two placeholders are usually identical there.
+
 ## Default Keymaps (registered by setup when enable_default_keymaps = true)
 
 | Key           | Action                                                        |
@@ -192,19 +292,19 @@ require("git-worktrees").setup({
 
 ## In-picker Keybindings
 
-| Key     | Pickers          | Action                                                                                                                                                                      |
-| ------- | ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `<CR>`  | worktree, branch | Switch to worktree / branch (create worktree if missing); respects `switch_file_command`                                                                                    |
-| `<C-e>` | worktree only    | Switch and open the current file with `edit`, ignoring `switch_file_command`                                                                                                |
-| `<C-s>` | worktree only    | Switch and open the current file in a horizontal split, ignoring `switch_file_command`                                                                                      |
-| `<C-v>` | worktree only    | Switch and open the current file in a vertical split, ignoring `switch_file_command`                                                                                        |
-| `<C-t>` | worktree only    | Switch and open the current file in a new tab, ignoring `switch_file_command`                                                                                               |
-| `<C-x>` | worktree, branch | Simple delete: local branch -> delete local only; remote branch -> delete remote only                                                                                       |
-| `<M-x>` | worktree, branch | Extended delete: local -> delete local then prompt to also delete remote; remote -> delete remote then prompt to also delete local; worktree pickers: remove worktree first |
-| `<M-v>` | worktree only    | Force path prompt even when `auto_worktree_path = true`                                                                                                                     |
-| `<C-o>` | worktree, branch | Show branch info notification (branch, ref, worktree, author, date, HEAD commit)                                                                                            |
-| `<M-n>` | worktree, branch | Fork branch (worktree pickers: create branch + worktree; branch picker: branch only)                                                                                        |
-| `<M-g>` | worktree, branch | Cycle branch type: local -> remote -> all -> local                                                                                                                          |
+| Key                            | Pickers               | Action                                                                                                                                                                    |
+| ------------------------------ | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `<CR>`                         | worktree,&nbsp;branch | Switch to worktree / branch (create worktree if missing); respects `switch_file_command`                                                                                  |
+| <code>&lt;C&#8209;e&gt;</code> | worktree&nbsp;only    | Switch and open the current file with `edit`, ignoring `switch_file_command`                                                                                              |
+| <code>&lt;C&#8209;s&gt;</code> | worktree&nbsp;only    | Switch and open the current file in a horizontal split, ignoring `switch_file_command`                                                                                    |
+| <code>&lt;C&#8209;v&gt;</code> | worktree&nbsp;only    | Switch and open the current file in a vertical split, ignoring `switch_file_command`                                                                                      |
+| <code>&lt;C&#8209;t&gt;</code> | worktree&nbsp;only    | Switch and open the current file in a new tab, ignoring `switch_file_command`                                                                                             |
+| <code>&lt;C&#8209;x&gt;</code> | worktree,&nbsp;branch | Simple delete: local branch → delete local only; remote branch → delete remote only                                                                                       |
+| <code>&lt;M&#8209;x&gt;</code> | worktree,&nbsp;branch | Extended delete: local → delete local then prompt to also delete remote; remote → delete remote then prompt to also delete local; worktree pickers: remove worktree first |
+| <code>&lt;M&#8209;v&gt;</code> | worktree&nbsp;only    | Force path prompt even when `auto_worktree_path = true`                                                                                                                   |
+| <code>&lt;C&#8209;o&gt;</code> | worktree,&nbsp;branch | Show branch info notification (branch, ref, worktree, author, date, `HEAD`&nbsp;commit)                                                                                   |
+| <code>&lt;M&#8209;n&gt;</code> | worktree,branch       | Fork branch (worktree pickers: create branch + worktree; branch picker: branch only)                                                                                      |
+| <code>&lt;M&#8209;g&gt;</code> | worktree,branch       | Cycle branch type: local → remote → all → local                                                                                                                           |
 
 The four file-open overrides (`<C-e>`, `<C-s>`, `<C-v>`, `<C-t>`) only apply when
 `swap_current_buffer` is enabled. They override `switch_file_command` for that single
