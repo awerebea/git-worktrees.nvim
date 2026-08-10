@@ -407,11 +407,13 @@ local function show_status_win(wt_path, title)
   local lines = vim.split(status ~= "" and status or "(no changes)", "\n", { plain = true })
   local max_line = 0
   for _, line in ipairs(lines) do
-    if #line > max_line then
-      max_line = #line
+    local w = vim.api.nvim_strwidth(line)
+    if w > max_line then
+      max_line = w
     end
   end
-  local win_width = math.min(math.max(max_line + 4, #title + 6), math.floor(vim.o.columns * 0.85))
+  local title_w = vim.api.nvim_strwidth(title)
+  local win_width = math.min(math.max(max_line + 4, title_w + 6), math.floor(vim.o.columns * 0.85))
   local has_tabline = vim.o.showtabline == 2 or (vim.o.showtabline == 1 and vim.fn.tabpagenr("$") > 1)
   local t = config.status_win_timeout ~= nil and config.status_win_timeout or 0
   local win = Snacks.win({
@@ -962,8 +964,9 @@ function M.branch_info(picker, item) --luacheck: ignore picker
   -- auto-closes after branch_info_timeout ms (0 = stay until dismissed).
   local max_line = 0
   for _, line in ipairs(lines) do
-    if #line > max_line then
-      max_line = #line
+    local w = vim.api.nvim_strwidth(line)
+    if w > max_line then
+      max_line = w
     end
   end
   local t = config.branch_info_timeout ~= nil and config.branch_info_timeout or 5000

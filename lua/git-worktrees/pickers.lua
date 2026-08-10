@@ -36,24 +36,28 @@ end
 local function compute_layout(items, win_w, has_path)
   local bw, pw, aw, dw = 6, 2, 6, 4
 
+  -- Measure display cells, not bytes: a committer name like "Unal Ozturk" spelled with
+  -- diacritics is wider in bytes than on screen, which would pad its column too far.
+  local width = vim.api.nvim_strwidth
+
   for _, item in ipairs(items) do
     local bo = item.is_remote and "(" or "["
     local bc = item.is_remote and ")" or "]"
-    local bd = #(bo .. item.branch .. bc)
+    local bd = width(bo .. item.branch .. bc)
     if bd > bw then
       bw = bd
     end
     if has_path then
-      local p = #item.display_path
+      local p = width(item.display_path)
       if p > pw then
         pw = p
       end
     end
-    local a = #(item.author or "")
+    local a = width(item.author or "")
     if a > aw then
       aw = a
     end
-    local d = #(item.date or "")
+    local d = width(item.date or "")
     if d > dw then
       dw = d
     end
