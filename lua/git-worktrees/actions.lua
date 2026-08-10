@@ -291,6 +291,12 @@ function M._create_worktree(item, force_prompt, on_done, cmd_override)
   local branch_safe = branch_name
 
   local function _finish(wt_path)
+    -- Simplify before doing anything with the path: a prompt entry such as "../foo"
+    -- otherwise keeps its literal ".." segments, and since git resolves them when it
+    -- reports worktree paths, the creation notice and the picker afterwards would
+    -- disagree about where the worktree is.
+    wt_path = vim.fn.simplify(wt_path)
+
     local from_path = vim.fn.getcwd()
     if run_hook("before_switch", from_path, wt_path) == false then
       on_done(nil)
