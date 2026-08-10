@@ -266,7 +266,8 @@ function M._create_worktree(item, force_prompt, on_done, cmd_override)
 
     vim.fn.chdir(wt_path)
     vim.cmd("redrawstatus!")
-    local display = fmt.format_path(wt_path, config.wt_path_display, wt_data.git_common_dir, base_path, wt_data.git_root)
+    local display =
+      fmt.format_path(wt_path, config.wt_path_display, wt_data.git_common_dir, base_path, wt_data.git_root)
     notify("Created worktree: " .. display .. " for '" .. branch_name .. "'", vim.log.levels.INFO)
     run_hook("on_add", branch_name, wt_path)
     run_hook("on_switch", from_path, wt_path)
@@ -347,11 +348,12 @@ local function show_status_win(wt_path, title)
   local lines = vim.split(status ~= "" and status or "(no changes)", "\n", { plain = true })
   local max_line = 0
   for _, line in ipairs(lines) do
-    if #line > max_line then max_line = #line end
+    if #line > max_line then
+      max_line = #line
+    end
   end
   local win_width = math.min(math.max(max_line + 4, #title + 6), math.floor(vim.o.columns * 0.85))
-  local has_tabline = vim.o.showtabline == 2
-    or (vim.o.showtabline == 1 and vim.fn.tabpagenr("$") > 1)
+  local has_tabline = vim.o.showtabline == 2 or (vim.o.showtabline == 1 and vim.fn.tabpagenr("$") > 1)
   local t = config.status_win_timeout ~= nil and config.status_win_timeout or 0
   local win = Snacks.win({
     text = lines,
@@ -373,7 +375,9 @@ local function show_status_win(wt_path, title)
   })
   if t > 0 then
     vim.defer_fn(function()
-      if win:win_valid() then win:close() end
+      if win:win_valid() then
+        win:close()
+      end
     end, t)
   end
   return win
@@ -715,10 +719,7 @@ local function restore_stash(stash_id, init_wt_path, new_wt_path)
       notify("Changes moved to new worktree.", vim.log.levels.INFO)
       return
     end
-    notify(
-      "git-worktrees: stash apply failed in new worktree; restoring to original worktree.",
-      vim.log.levels.WARN
-    )
+    notify("git-worktrees: stash apply failed in new worktree; restoring to original worktree.", vim.log.levels.WARN)
     git.worktree_reset_hard(new_wt_path)
   end
 
@@ -812,30 +813,34 @@ function M.worktree_fork(picker, item)
       notify("Created branch: " .. new_name .. " from '" .. snapshot.branch .. "'", vim.log.levels.INFO)
 
       -- Create the worktree. On failure, delete the orphaned branch and restore any stash.
-      M._create_worktree({
-        branch = new_name,
-        ref = "refs/heads/" .. new_name,
-        is_remote = false,
-        wt_path = nil,
-        display_path = "",
-      }, false, function(new_wt_path)
-        if not new_wt_path then
-          git.branch_delete(new_name, true)
-          notify(
-            "git-worktrees: deleted orphaned branch '" .. new_name .. "' (worktree creation aborted).",
-            vim.log.levels.WARN
-          )
-          if stash_id then
-            restore_stash(stash_id, init_wt_path, nil)
+      M._create_worktree(
+        {
+          branch = new_name,
+          ref = "refs/heads/" .. new_name,
+          is_remote = false,
+          wt_path = nil,
+          display_path = "",
+        },
+        false,
+        function(new_wt_path)
+          if not new_wt_path then
+            git.branch_delete(new_name, true)
+            notify(
+              "git-worktrees: deleted orphaned branch '" .. new_name .. "' (worktree creation aborted).",
+              vim.log.levels.WARN
+            )
+            if stash_id then
+              restore_stash(stash_id, init_wt_path, nil)
+            end
+            return
           end
-          return
-        end
 
-        -- Apply stash to the new worktree (falls back to original on failure).
-        if stash_id then
-          restore_stash(stash_id, init_wt_path, new_wt_path)
+          -- Apply stash to the new worktree (falls back to original on failure).
+          if stash_id then
+            restore_stash(stash_id, init_wt_path, new_wt_path)
+          end
         end
-      end)
+      )
     end)
   end)
 end
@@ -895,12 +900,13 @@ function M.branch_info(picker, item) --luacheck: ignore picker
   -- auto-closes after branch_info_timeout ms (0 = stay until dismissed).
   local max_line = 0
   for _, line in ipairs(lines) do
-    if #line > max_line then max_line = #line end
+    if #line > max_line then
+      max_line = #line
+    end
   end
   local t = config.branch_info_timeout ~= nil and config.branch_info_timeout or 5000
   local win_width = math.min(max_line + 4, math.floor(vim.o.columns * 0.85))
-  local has_tabline = vim.o.showtabline == 2
-    or (vim.o.showtabline == 1 and vim.fn.tabpagenr("$") > 1)
+  local has_tabline = vim.o.showtabline == 2 or (vim.o.showtabline == 1 and vim.fn.tabpagenr("$") > 1)
   local info_win = Snacks.win({
     text = lines,
     relative = "editor",
@@ -919,7 +925,9 @@ function M.branch_info(picker, item) --luacheck: ignore picker
   })
   if t > 0 then
     vim.defer_fn(function()
-      if info_win:win_valid() then info_win:close() end
+      if info_win:win_valid() then
+        info_win:close()
+      end
     end, t)
   end
 end

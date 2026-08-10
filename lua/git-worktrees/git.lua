@@ -420,8 +420,21 @@ end
 ---@return GitWorktrees.CommitDetails|nil
 function M.get_commit_details(ref, cwd)
   local sep = "\x1f"
-  local fmt = "%H" .. sep .. "%an" .. sep .. "%ae" .. sep .. "%ai"
-    .. sep .. "%cn" .. sep .. "%ce" .. sep .. "%ci" .. sep .. "%B"
+  local fmt = "%H"
+    .. sep
+    .. "%an"
+    .. sep
+    .. "%ae"
+    .. sep
+    .. "%ai"
+    .. sep
+    .. "%cn"
+    .. sep
+    .. "%ce"
+    .. sep
+    .. "%ci"
+    .. sep
+    .. "%B"
   local out = run({ "git", "log", "-1", "--format=" .. fmt, ref }, cwd)
   if not out then
     return nil
