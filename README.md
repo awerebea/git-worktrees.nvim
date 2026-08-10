@@ -477,11 +477,11 @@ hooks = {
 ```lua
 local gw = require("git-worktrees")
 
-gw.setup(opts)          -- initialize with config
-gw.worktrees(opts?)     -- open worktree total picker
-gw.worktrees_add(opts?) -- open add-worktree picker (no_worktree filter)
-gw.worktrees_manage(opts?) -- open manage-worktrees picker (has_worktree filter)
-gw.branches(opts?)      -- open branch management picker
+gw.setup(opts)              -- initialize with config
+gw.worktrees(opts?)         -- open worktree total picker
+gw.worktrees_add(opts?)     -- open add-worktree picker (no_worktree filter)
+gw.worktrees_manage(opts?)  -- open manage-worktrees picker (has_worktree filter)
+gw.branches(opts?)          -- open branch management picker
 ```
 
 Each function accepts an optional `opts` table that overrides the global config for
