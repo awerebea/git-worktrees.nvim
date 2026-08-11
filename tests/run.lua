@@ -546,8 +546,100 @@ do
   local fresh_prompts = create_from_remote("origin/stale", 2)
   eq("no prompt when the counterpart is up to date", #fresh_prompts, 0)
 
+  -- These tests create worktrees and a tracking branch as a side effect. Put the clone
+  -- back as it was so later sections do not inherit them.
+  vim.fn.chdir(TMP .. "/clone")
+  for _, name in ipairs({ "stale", "orphan" }) do
+    pcall(git, { "worktree", "remove", "--force", TMP .. "/made/" .. name }, TMP .. "/clone")
+  end
+  vim.fn.delete(TMP .. "/made", "rf")
+  git({ "worktree", "prune" }, TMP .. "/clone")
+  pcall(git, { "branch", "-D", "orphan" }, TMP .. "/clone")
+  git({ "branch", "-f", "stale", "origin/stale~1" }, TMP .. "/clone")
+
   vim.fn.confirm = real_confirm
   vim.ui.input = real_input
+end
+
+describe("9. branch info reports the worktree a row resolves to")
+do
+  local act = require("git-worktrees.actions")
+  local fmt = require("git-worktrees.format")
+
+  local shown
+  local real_win = _G.Snacks.win
+  _G.Snacks.win = function(opts)
+    shown = opts.text
+    return {
+      win_valid = function()
+        return false
+      end,
+      close = function() end,
+    }
+  end
+
+  --- Return the "worktree" line of the <C-o> popup for `branch`, or nil when absent.
+  ---@param branch string
+  ---@return string|nil
+  local function worktree_line(branch)
+    local cwd = TMP .. "/clone"
+    vim.fn.chdir(cwd)
+    local items = fmt.build_items(
+      gitmod.get_branches("all", cwd, {}),
+      gitmod.get_worktree_data(cwd),
+      { wt_path_display = "absolute" },
+      gitmod.get_current_branch(cwd),
+      nil,
+      gitmod.get_local_upstreams(cwd)
+    )
+    for _, item in ipairs(items) do
+      if item.branch == branch then
+        shown = nil
+        act.branch_info(nil, item)
+        for _, line in ipairs(shown or {}) do
+          local value = line:match("^worktree%s+:%s+(.+)$")
+          if value then
+            return value
+          end
+        end
+        return nil
+      end
+    end
+    error("no row for " .. branch)
+  end
+
+  local wt = vim.uv.fs_realpath(TMP .. "/clone-wt")
+  eq("a local row reports its own worktree, unqualified", worktree_line("linked-remote"), wt)
+  eq("a remote row now reports one at all", worktree_line("origin/linked-remote"), wt)
+  eq("a remote row with no resolved worktree reports none", worktree_line("origin/stale"), nil)
+
+  -- A local branch tracking a differently named remote branch: the owner is not obvious
+  -- from the row, so it is named.
+  git({ "branch", "-q", "alias", "origin/orphan" }, TMP .. "/clone")
+  git({ "branch", "-q", "--set-upstream-to=origin/orphan", "alias" }, TMP .. "/clone")
+  git({ "worktree", "add", "-q", TMP .. "/clone-wt-alias", "alias" }, TMP .. "/clone")
+  eq(
+    "a borrowed worktree names the branch that owns it",
+    worktree_line("origin/orphan"),
+    vim.uv.fs_realpath(TMP .. "/clone-wt-alias") .. " (alias)"
+  )
+
+  -- Many-to-one where the name match wins: nothing to disambiguate.
+  eq(
+    "the name-matching owner is not spelled out",
+    worktree_line("origin/twin-a"),
+    vim.uv.fs_realpath(TMP .. "/clone-wt-a")
+  )
+  -- ...and when the fallback wins, it is.
+  git({ "worktree", "remove", "--force", TMP .. "/clone-wt-a" }, TMP .. "/clone")
+  eq(
+    "a fallback owner is spelled out",
+    worktree_line("origin/twin-a"),
+    vim.uv.fs_realpath(TMP .. "/clone-wt-b") .. " (twin-b)"
+  )
+  git({ "worktree", "add", "-q", TMP .. "/clone-wt-a", "twin-a" }, TMP .. "/clone")
+
+  _G.Snacks.win = real_win
 end
 
 --------------------------------------------------------------------------------

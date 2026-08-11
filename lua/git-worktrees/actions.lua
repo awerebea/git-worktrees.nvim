@@ -1031,6 +1031,7 @@ function M.branch_info(picker, item) --luacheck: ignore picker
     branch = item.branch,
     ref = item.ref,
     display_path = item.display_path,
+    wt_branch = item.wt_branch,
     is_remote = item.is_remote,
   })
 
@@ -1041,8 +1042,21 @@ function M.branch_info(picker, item) --luacheck: ignore picker
   end
 
   local lines = { field("branch", snapshot.branch) }
-  if not snapshot.is_remote and snapshot.display_path ~= "" then
-    lines[#lines + 1] = field("worktree", snapshot.display_path)
+  if snapshot.display_path ~= "" then
+    -- The name a worktree for this row would be checked out under: for a remote row that
+    -- is its name without the remote prefix, which is the local branch git resolves it to.
+    local own_name = snapshot.branch
+    if snapshot.is_remote then
+      own_name = snapshot.branch:match("[^/]+/(.+)") or snapshot.branch
+    end
+    -- Name the owning branch only when it is not that one. A remote row borrows the
+    -- worktree of a local branch tracking it, and the path alone cannot say which branch
+    -- is checked out there; when the names agree there is nothing to disambiguate.
+    local worktree = snapshot.display_path
+    if snapshot.wt_branch and snapshot.wt_branch ~= own_name then
+      worktree = worktree .. " (" .. snapshot.wt_branch .. ")"
+    end
+    lines[#lines + 1] = field("worktree", worktree)
   end
 
   local details = git.get_commit_details(snapshot.ref, vim.fn.getcwd())

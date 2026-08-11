@@ -358,7 +358,10 @@ A remote branch whose local counterpart already exists behaves differently, beca
   even when the local branch is named differently from the remote branch it tracks. If
   several local branches track one remote branch and more than one has a worktree, the
   one named like the remote branch wins, and otherwise the alphabetically first - branch
-  names are unique, so the choice never depends on ordering.
+  names are unique, so the choice never depends on ordering. Both rows show that
+  worktree in the path column, since that is where `<CR>` goes from either; `<C-o>` on
+  the remote row names the local branch that owns it whenever that is not simply the
+  remote branch's own name.
 - **The counterpart exists but is behind the remote.** The new worktree would check out
   the local branch and so would not contain the remote's state. The plugin says how far
   behind it is and offers to reset the local branch to the remote branch first,
