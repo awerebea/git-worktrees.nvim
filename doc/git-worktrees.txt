@@ -1,0 +1,658 @@
+*git-worktrees.txt*  Git worktrees and branches via the Snacks picker
+
+                          git-worktrees.nvim manual
+
+Browse branches in a picker, switch to or create a worktree for any of them,
+delete worktrees and branches, and fork a branch into a new worktree, without
+leaving Neovim.
+
+==============================================================================
+CONTENTS                                                  *git-worktrees-toc*
+
+  1. Introduction ................................ |git-worktrees-intro|
+  2. Requirements ............................... |git-worktrees-requirements|
+  3. Setup ....................................... |git-worktrees-setup|
+  4. Commands .................................... |git-worktrees-commands|
+  5. Keymaps ..................................... |git-worktrees-keymaps|
+  6. In-picker keys .............................. |git-worktrees-picker-keys|
+  7. Configuration ............................... |git-worktrees-config|
+  8. Configuration examples ...................... |git-worktrees-examples|
+  9. Worktree base paths ......................... |git-worktrees-base-path|
+ 10. Remote branches ............................. |git-worktrees-remote|
+ 11. Submodules .................................. |git-worktrees-submodules|
+ 12. Stash transfer .............................. |git-worktrees-stash|
+ 13. Hooks ....................................... |git-worktrees-hooks|
+ 14. API ......................................... |git-worktrees-api|
+ 15. Troubleshooting ............................. |git-worktrees-trouble|
+ 16. FAQ ......................................... |git-worktrees-faq|
+
+==============================================================================
+1. INTRODUCTION                                          *git-worktrees-intro*
+                                                      *git-worktrees.nvim*
+                                                      *git-worktrees*
+
+git-worktrees.nvim provides four pickers built on snacks.nvim:
+
+  - worktree total   all branches; switch to or create a worktree
+  - worktree add     branches without a worktree; create one
+  - worktree manage  branches with a worktree; jump between them
+  - branch manage    switch, delete or fork any branch; no worktree operations
+
+Every destructive step asks for confirmation first and defaults to "No".
+
+The columns are branch, worktree path (or a presence flag), author and date.
+They collapse in that order when the window is too narrow to hold them.
+
+==============================================================================
+2. REQUIREMENTS                                   *git-worktrees-requirements*
+
+  - Neovim >= 0.10
+  - snacks.nvim
+  - `git` on $PATH
+
+plenary.nvim is not required. Only one optional hook example uses it.
+
+snacks.nvim needs no configuration for this plugin: it ships a
+plugin/snacks.lua that runs require("snacks"), which defines the Snacks
+global, and Snacks.picker is resolved on first access through a metatable. The
+picker API works even with picker = { enabled = false } in Snacks.setup();
+that flag only controls whether snacks takes over |vim.ui.select()|. Listing
+snacks.nvim as a dependency is enough, and a plugin manager loads a dependency
+before the plugin that declares it.
+
+==============================================================================
+3. SETUP                                                 *git-worktrees-setup*
+
+The plugin does nothing until |git-worktrees.setup()| runs: the user commands
+are created there, and the built-in keymaps are created there when
+|git-worktrees-enable_default_keymaps| is enabled.
+
+>lua
+    require("git-worktrees").setup({})
+<
+With lazy.nvim, an `opts` table is enough; lazy calls `setup()` for you.
+See |git-worktrees-examples| for complete specs.
+
+==============================================================================
+4. COMMANDS                                           *git-worktrees-commands*
+
+Created by `setup()`, always, regardless of the keymap option.
+
+                                                        *:GitWorktreeTotal*
+:GitWorktreeTotal       All branches, whether or not they have a worktree.
+                        Switch to or create a worktree, delete it, or fork to
+                        a new branch plus worktree.
+
+                                                        *:GitWorktreeAdd*
+:GitWorktreeAdd         Only branches without a worktree. Create a worktree,
+                        fork the branch, or delete it.
+
+                                                        *:GitWorktreeManage*
+:GitWorktreeManage      Only branches with a worktree. Jump between worktrees,
+                        delete one, or fork to a new branch plus worktree.
+
+                                                        *:GitBranchManage*
+:GitBranchManage        All branches. Switch HEAD, delete local and/or remote,
+                        or fork a branch. Performs no worktree operations, so
+                        it also works inside a submodule.
+
+==============================================================================
+5. KEYMAPS                                             *git-worktrees-keymaps*
+
+No keymaps are created unless |git-worktrees-enable_default_keymaps| is set to
+true. The default is false, so out of the box this plugin maps nothing.
+
+When enabled, these normal-mode mappings are created:
+
+    <leader>gwt     :GitWorktreeTotal
+    <leader>gwa     :GitWorktreeAdd
+    <leader>gwm     :GitWorktreeManage
+    <leader>gbm     :GitBranchManage
+
+Defining your own mappings and enabling the built-in ones are independent:
+both sets get created. Where they share a left-hand side, whichever is
+registered last wins, and that depends on load order. Pick one mechanism.
+
+==============================================================================
+6. IN-PICKER KEYS                                  *git-worktrees-picker-keys*
+
+Active while a picker is open. These are not configurable.
+
+    <CR>    Switch to the worktree or branch, creating the worktree if it does
+            not exist. Respects |git-worktrees-swap_current_buffer| and
+            |git-worktrees-switch_file_command|.
+
+    <C-e>   Switch, then open the current file with `edit`.
+    <C-s>   Switch, then open it in a horizontal split.
+    <C-v>   Switch, then open it in a vertical split.
+    <C-t>   Switch, then open it in a new tab.
+            (worktree pickers only)
+
+    <C-x>   Simple delete. A local branch deletes the local branch only; a
+            remote branch deletes the remote branch only. In the worktree
+            pickers the worktree is removed first, then the branch is offered.
+
+    <M-x>   Extended delete. A local selection deletes the local branch and
+            then offers the remote; a remote selection deletes the remote and
+            then offers the local.
+
+    <M-v>   Force the path prompt even when
+            |git-worktrees-auto_worktree_path| is true. (worktree pickers)
+
+    <C-o>   Open a popup with branch details: branch, worktree, author,
+            dates, HEAD commit and message. The picker stays open.
+
+    <M-n>   Fork the branch. In the worktree pickers this creates a branch and
+            a worktree for it; in the branch picker, a branch only.
+
+    <M-g>   Cycle the branch scope: local -> remote -> all -> local. Use this
+            to reveal remote-only branches.
+
+The four file-open overrides <C-e>, <C-s>, <C-v> and <C-t> always switch and
+then try to open a file, whatever |git-worktrees-swap_current_buffer| says,
+and always use their own command rather than
+|git-worktrees-switch_file_command|. Pressing one is itself a request to open
+something, so no "ask" prompt appears either. When there is no current buffer,
+the current buffer lies outside the worktree being left, or the equivalent
+file does not exist in the new worktree, they open a file picker at the new
+worktree root instead of doing nothing.
+
+<CR> is the only key that honours |git-worktrees-swap_current_buffer| as
+configured.
+
+Deleting a worktree and deleting its branch are separate questions, which is
+what distinguishes <C-x> from <M-x> in the worktree pickers. Answering "No" at
+any point skips everything after it; anything already removed stays removed.
+
+==============================================================================
+7. CONFIGURATION                                        *git-worktrees-config*
+
+Pass any subset of these to `setup()`. Anything you omit keeps its default.
+
+------------------------------------------------------------------------------
+Display                                        *git-worktrees-config-display*
+
+                                            *git-worktrees-wt_path_display*
+wt_path_display ~
+        Type: string    Default: "tilde"
+
+        How worktree paths are shown in the picker:
+
+            "tilde"             absolute, with $HOME collapsed to ~
+            "absolute"          full absolute path
+            "relative-cwd"      relative to Neovim's cwd
+            "relative-home"     relative to cwd, $HOME shown as ~
+            "relative-repo"     relative to the working-tree root; for a bare
+                                repo, the bare directory itself
+            "relative-wt-base"  relative to the worktree base path, which is
+                                usually just the branch name
+            "relative-gitdir"   relative to the git common directory
+            "absolute-gitdir"   same result as "absolute"
+            "tilde-gitdir"      same result as "tilde"
+
+        A path made only of parent segments gets a trailing slash, so ".",
+        ".." and "../.." display as "./", "../" and "../../".
+
+                                          *git-worktrees-branch_info_timeout*
+branch_info_timeout ~
+        Type: integer   Default: 5000
+
+        Milliseconds before the <C-o> branch info popup closes. 0 keeps it
+        until dismissed.
+
+                                           *git-worktrees-status_win_timeout*
+status_win_timeout ~
+        Type: integer   Default: 0
+
+        Milliseconds before the `git status` popup shown ahead of a
+        force-delete closes. 0 keeps it until the confirmation is answered.
+
+                                                *git-worktrees-notify_timeout*
+notify_timeout ~
+        Type: integer or nil    Default: nil
+
+        Milliseconds for this plugin's notifications. nil lets the
+        notification handler use its own default.
+
+------------------------------------------------------------------------------
+Worktree creation                             *git-worktrees-config-worktree*
+
+                                          *git-worktrees-wt_base_path_bare*
+                                          *git-worktrees-wt_base_path_regular*
+wt_base_path_bare ~
+wt_base_path_regular ~
+        Type: string    Default: "./wt"
+
+        Where new worktrees are created, for bare and for regular repos
+        respectively. See |git-worktrees-base-path|.
+
+                                           *git-worktrees-auto_worktree_path*
+auto_worktree_path ~
+        Type: boolean   Default: false
+
+        false pre-fills the computed path into an editable prompt. true uses
+        <base_path>/<branch_name> without asking. <M-v> forces the prompt for
+        a single selection either way.
+
+------------------------------------------------------------------------------
+Branch listing                                  *git-worktrees-config-branch*
+
+                                                  *git-worktrees-branch_type*
+branch_type ~
+        Type: "local" | "remote" | "all"    Default: "local"
+
+        Branch scope a picker opens with. Cycle it live with <M-g>.
+
+                                                      *git-worktrees-sort_by*
+sort_by ~
+        Type: string    Default: "-committerdate"
+
+        Sort key passed to `git for-each-ref --sort`. Prefix with "-" for
+        descending order. Examples: "refname", "-authordate",
+        "-committerdate,committername".
+
+                                                  *git-worktrees-date_format*
+date_format ~
+        Type: string    Default: "relative"
+
+        Date column format, used as `committerdate:<value>`. Examples:
+        "short", "iso", "human", "format:%Y-%m-%d".
+
+                                                *git-worktrees-author_format*
+author_format ~
+        Type: "name" | "email"    Default: "name"
+
+        Author column source: committername or committeremail.
+
+------------------------------------------------------------------------------
+Buffer handling                                 *git-worktrees-config-buffer*
+
+                                          *git-worktrees-swap_current_buffer*
+swap_current_buffer ~
+        Type: boolean or "ask"    Default: false
+
+        What <CR> does with the current buffer when switching worktrees:
+
+            false   leave the buffer unchanged
+            true    open the equivalent file in the new worktree
+            "ask"   prompt before opening it
+
+        When the equivalent file does not exist, a file picker opens at the
+        new worktree root instead. The file-open overrides ignore this
+        setting; see |git-worktrees-picker-keys|.
+
+                                          *git-worktrees-switch_file_command*
+switch_file_command ~
+        Type: string or false    Default: "edit"
+
+        Vim command used to open that file: "edit", "tabedit", "vsplit",
+        "split". Use false or "" to change the working directory without
+        opening anything.
+
+        Note: nil does not disable it. A nil value in the table passed to
+        `setup()` leaves the default in place rather than clearing it,
+        because that is how table merging works. Use false.
+
+------------------------------------------------------------------------------
+Keymaps                                        *git-worktrees-config-keymaps*
+
+                                       *git-worktrees-enable_default_keymaps*
+enable_default_keymaps ~
+        Type: boolean   Default: false
+
+        Creates the mappings listed in |git-worktrees-keymaps| when `setup()`
+        runs. Leave it false when you define your own mappings, whether with
+        |vim.keymap.set()| or a plugin manager's lazy-loading keys table.
+
+        The user commands are created either way; this option affects only
+        keymaps.
+
+------------------------------------------------------------------------------
+Integration                                      *git-worktrees-config-hooks*
+
+                                                        *git-worktrees-hooks*
+hooks ~
+        Type: table     Default: {}
+
+        Lifecycle callbacks. See |git-worktrees-hooks-list|.
+
+==============================================================================
+8. CONFIGURATION EXAMPLES                             *git-worktrees-examples*
+
+Built-in keymaps: >lua
+    require("git-worktrees").setup({
+      enable_default_keymaps = true,
+    })
+<
+Your own keymaps instead, leaving the built-ins off. `require` caches, so the
+local is the module table and picks up whatever `setup()` stores: >lua
+    local gw = require("git-worktrees")
+
+    gw.setup({})
+
+    vim.keymap.set("n", "<leader>wt", function() gw.worktrees() end,
+      { desc = "Worktree total" })
+    vim.keymap.set("n", "<leader>wa", function() gw.worktrees_add() end,
+      { desc = "Worktree add" })
+<
+One option changed, everything else default: >lua
+    require("git-worktrees").setup({
+      auto_worktree_path = true,
+    })
+<
+Worktrees outside the repository, shown relative to their base: >lua
+    require("git-worktrees").setup({
+      wt_base_path_bare    = "../worktrees/{repo_name_short}",
+      wt_base_path_regular = "../../worktrees/{repo_name}",
+      wt_path_display      = "relative-wt-base",
+    })
+<
+lazy.nvim, with mappings in the plugin spec. `enable_default_keymaps` is
+spelled out only to make the interaction explicit; false is the default: >lua
+  {
+    "awerebea/git-worktrees.nvim",
+    dependencies = { "folke/snacks.nvim" },
+    keys = {
+      -- one entry per picker; see |git-worktrees-api| for the four functions
+      { "<leader>gwt", function() require("git-worktrees").worktrees() end,
+        desc = "Worktree total" },
+    },
+    cmd = {
+      "GitWorktreeTotal", "GitWorktreeAdd",
+      "GitWorktreeManage", "GitBranchManage",
+    },
+    opts = {
+      enable_default_keymaps = false,
+    },
+  }
+<
+lazy.nvim, using the built-in mappings instead. Drop `keys` and give lazy
+another load trigger, since `cmd` alone will not fire on a keypress: >lua
+  {
+    "awerebea/git-worktrees.nvim",
+    dependencies = { "folke/snacks.nvim" },
+    event = "VeryLazy",
+    opts = {
+      enable_default_keymaps = true,
+    },
+  }
+<
+Per-invocation override, which does not change the stored config: >lua
+    require("git-worktrees").worktrees({ branch_type = "all" })
+<
+==============================================================================
+9. WORKTREE BASE PATHS                               *git-worktrees-base-path*
+
+A new worktree is created at <base_path>/<branch_name>, so a branch named
+"feat/foo" nests under <base_path>/feat/foo.
+
+A base path template is resolved in four steps:
+
+  1. {repo_name} and {repo_name_short} are substituted.
+  2. A leading ~ and any $VAR references are expanded.
+  3. What remains is used as-is when it starts with "/", and anchored to the
+     repository's git common directory otherwise.
+  4. "." and ".." segments are collapsed, so an escaping template leaves none
+     behind.
+
+{repo_name} is the name of the repository's working-tree root directory; for a
+bare repo, the bare directory itself, for example "my-repo.git".
+{repo_name_short} is the same with a trailing ".git" removed.
+
+The git common directory is the bare directory for a bare repo, and
+<repo-root>/.git for a regular one. The default "./wt" therefore creates
+worktrees inside the bare directory, or inside .git/ for a regular repo. That
+is safe: git never scans .git/ for the main worktree's status, so nested
+worktrees do not appear as untracked files.
+
+Because a regular repo's git common directory sits one level deeper, it takes
+two ".." to reach the directory a bare repo's ".." reaches in one step:
+
+    bare      "../worktrees"          -> ~/Work/worktrees/feat/foo
+    regular   "../../worktrees"       -> ~/Work/worktrees/feat/foo
+
+Grouping several repositories under one shared directory:
+
+    "../worktrees/{repo_name_short}"  -> ~/Work/worktrees/my-repo/feat/foo
+
+With worktrees outside the repository, |git-worktrees-wt_path_display| set to
+"relative-wt-base" keeps the picker rows short.
+
+==============================================================================
+10. REMOTE BRANCHES                                     *git-worktrees-remote*
+
+|git-worktrees-branch_type| defaults to "local", so remote-tracking branches
+are hidden until <M-g> switches the scope to "remote" or "all".
+
+Selecting a remote branch with no local counterpart creates a worktree for it:
+git recognises that the branch exists only as a remote-tracking ref and
+creates a local branch tracking it. This is the quickest way to start on
+someone else's branch.
+
+When a local counterpart already exists, `git worktree add` resolves the name
+to that branch, so two cases differ:
+
+Counterpart already has a worktree
+        The remote row points at that worktree, so <CR> switches to it rather
+        than failing with "already used by worktree at ...". Such rows appear
+        in |:GitWorktreeManage| and not in |:GitWorktreeAdd|. If the worktree
+        is behind the remote branch, the plugin reports how far and offers to
+        reset it, defaulting to no. The branch is checked out there, so the
+        reset is a `git reset --hard` inside that worktree; any uncommitted
+        changes are listed in the prompt before you answer.
+
+Counterpart exists, has no worktree, and is behind
+        The new worktree would check out the older local state. The plugin
+        reports how far behind and offers to reset the local branch to the
+        remote branch first, defaulting to no. Declining creates the worktree
+        from the local branch. If the local branch also holds commits the
+        remote does not, the prompt says how many a reset would discard.
+
+The link between a remote branch and its local counterpart is the branch's
+configured upstream, so it holds even when the local branch has a different
+name. If several local branches track one remote branch and more than one has
+a worktree, the branch named like the remote branch wins, otherwise the
+alphabetically first; branch names are unique, so the choice never depends on
+ordering. <C-o> on a remote row names the owning local branch whenever that is
+not simply the remote branch's own name.
+
+<remote>/HEAD is not listed: it is a symbolic ref pointing at another branch,
+not a branch of its own.
+
+==============================================================================
+11. SUBMODULES                                      *git-worktrees-submodules*
+
+Worktrees are not supported for git submodules. The worktree pickers report
+this and do nothing: >
+    git-worktrees: this repository is a submodule of
+    /Users/me/Work/my-project
+    Worktrees are not supported for submodules - skipping.
+    Clone the submodule as a standalone repository to use worktrees with it.
+<
+A submodule's git directory lives inside the superproject's, at
+<super>/.git/modules/<name>. Since base paths are anchored to the git common
+directory, a submodule's worktrees would be created under the superproject's
+.git, where ordinary tooling will not see them and `git submodule deinit`
+deletes them.
+
+The repository is determined from the current buffer's file rather than the
+cwd, so editing <super>/sub/file.lua while the cwd is <super> is recognised as
+the submodule. Working in the superproject is unaffected, and so are ordinary
+and bare repositories. |:GitBranchManage| keeps working everywhere.
+
+==============================================================================
+12. STASH TRANSFER                                       *git-worktrees-stash*
+
+When <M-n> forks a branch from a worktree picker and the current worktree has
+uncommitted changes to tracked files, three choices are offered:
+
+    Move            Stash the changes, create the branch and worktree, then
+                    apply the stash there. If that apply fails, the new
+                    worktree is reset and the stash is restored to the
+                    original. If that fails too, the stash ref and a recovery
+                    command are reported.
+
+    Leave here      Fork without touching the changes. This is the default.
+
+    Cancel          Abort.
+
+If worktree creation fails after the branch was created, whether from a git
+error or a cancelled path prompt, the orphaned branch is deleted and any
+pending stash is restored to the original worktree.
+
+==============================================================================
+13. HOOKS                                           *git-worktrees-hooks-list*
+
+Optional functions passed under |git-worktrees-hooks|. `from` and `to` are
+absolute paths. An error thrown inside a hook is caught and reported as a
+warning; it does not abort the operation.
+
+    before_switch   fun(from: string, to: string): boolean|nil
+                    Before switching. Return false to abort.
+
+    on_switch       fun(from: string, to: string)
+                    After the working directory has changed.
+
+    on_add          fun(branch: string, path: string)
+                    After a new worktree is created.
+
+    on_delete       fun(branch: string, path: string)
+                    After a worktree is deleted.
+
+Abort a switch based on the target path: >lua
+    hooks = {
+      before_switch = function(from, to)
+        if to:find("/wip/") then
+          vim.notify("Switch aborted: WIP worktrees are protected",
+            vim.log.levels.WARN)
+          return false
+        end
+      end,
+    }
+<
+Open a terminal in the new worktree: >lua
+    hooks = {
+      on_switch = function(from, to)
+        vim.schedule(function()
+          Snacks.terminal(nil, { cwd = to })
+        end)
+      end,
+    }
+<
+Log every worktree that gets created: >lua
+    hooks = {
+      on_add = function(branch, path)
+        local file = vim.fn.expand("~/.local/share/nvim/worktree_log.txt")
+        local log = io.open(file, "a")
+        if log then
+          log:write(os.date("%Y-%m-%d %H:%M:%S") .. "  " .. branch ..
+            "  " .. path .. "\n")
+          log:close()
+        end
+      end,
+    }
+<
+The README has a longer example that mirrors every open window into the new
+worktree.
+
+==============================================================================
+14. API                                                    *git-worktrees-api*
+
+                                                    *git-worktrees.setup()*
+require("git-worktrees").setup({opts})
+        Merge {opts} over the defaults, create the user commands, and create
+        the built-in keymaps when |git-worktrees-enable_default_keymaps| is
+        true. Must be called for anything else to exist.
+
+                                                *git-worktrees.worktrees()*
+require("git-worktrees").worktrees({opts})
+        Open the total picker. Same as |:GitWorktreeTotal|.
+
+                                            *git-worktrees.worktrees_add()*
+require("git-worktrees").worktrees_add({opts})
+        Open the add picker. Same as |:GitWorktreeAdd|.
+
+                                         *git-worktrees.worktrees_manage()*
+require("git-worktrees").worktrees_manage({opts})
+        Open the manage picker. Same as |:GitWorktreeManage|.
+
+                                                 *git-worktrees.branches()*
+require("git-worktrees").branches({opts})
+        Open the branch picker. Same as |:GitBranchManage|.
+
+The four picker functions take an optional {opts} table that overrides the
+stored configuration for that call only.
+
+                                                     *git-worktrees.config*
+require("git-worktrees").config
+        The merged configuration table, after `setup()`.
+
+==============================================================================
+15. TROUBLESHOOTING                                    *git-worktrees-trouble*
+
+":GitWorktreeTotal is not an editor command"
+        `setup()` has not run. The commands are created inside it, so a plugin
+        spec with no `opts`, no `config = true` and no `config` function never
+        creates them.
+
+Keymaps appear that you did not ask for
+        |git-worktrees-enable_default_keymaps| is true somewhere. It defaults
+        to false.
+
+Your mapping and a built-in one collide
+        Both are created; the later one wins, and that depends on load order.
+        Use either your own mappings or the built-in ones, not both.
+
+"not inside a git repository"
+        The pickers use Neovim's working directory. Check |:pwd|.
+
+"this repository is a submodule of ..."
+        Working as intended. See |git-worktrees-submodules|.
+
+New worktrees appear inside .git/
+        That is the default anchor. See |git-worktrees-base-path|.
+
+`switch_file_command = nil` did not disable file opening
+        Use false. See |git-worktrees-switch_file_command|.
+
+"attempt to index global 'Snacks' (a nil value)"
+        snacks.nvim is not installed, or is not loaded yet. It needs no
+        configuration, but it does need to be on the runtimepath. If you load
+        it lazily, list it as a dependency of this plugin so it loads first.
+        There is no fallback picker.
+
+You want different in-picker keys
+        They are not configurable. See |git-worktrees-picker-keys|.
+
+==============================================================================
+16. FAQ                                                    *git-worktrees-faq*
+
+Does it work with bare repositories?
+        Yes, and that is the primary workflow. The bare directory is treated
+        as the repository root.
+
+Where are worktrees created by default?
+        <repo>/.git/wt/<branch> for a regular repo, <repo>.git/wt/<branch> for
+        a bare one. See |git-worktrees-base-path|.
+
+Why is a remote branch missing from the picker?
+        |git-worktrees-branch_type| defaults to "local". Press <M-g>, or set
+        it to "all".
+
+Why does deleting ask more than once?
+        Removing a worktree and deleting its branch are separate actions and
+        each confirms separately. See |git-worktrees-picker-keys|.
+
+Do I need plenary.nvim?
+        No. Only one optional hook example in the README uses it.
+
+Can I use a different picker?
+        No. The plugin is built on the Snacks picker.
+
+Does it change the global working directory?
+        Yes. Switching calls |chdir()|, which is what makes the switch visible
+        to terminals, LSP roots and file pickers. Use the on_switch hook to
+        react to it.
+
+==============================================================================
+vim:tw=78:ts=8:noet:ft=help:norl:
