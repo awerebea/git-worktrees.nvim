@@ -549,7 +549,99 @@ do
   vim.ui.input = real_input
 end
 
-describe("9. branch info reports the worktree a row resolves to")
+describe("9. jumping to a counterpart's worktree reports it being stale")
+do
+  local act = require("git-worktrees.actions")
+  local fmt = require("git-worktrees.format")
+  local asked, answer
+
+  local real_confirm = vim.fn.confirm
+  ---@diagnostic disable-next-line: duplicate-set-field
+  vim.fn.confirm = function(msg)
+    asked[#asked + 1] = msg
+    return answer
+  end
+
+  --- Select a remote row that resolves to an existing worktree.
+  ---@param branch string
+  ---@param reply integer 1 = yes, 2 = no
+  ---@return string[] prompts
+  local function switch_to(branch, reply)
+    asked, answer = {}, reply
+    local cwd = TMP .. "/clone"
+    vim.fn.chdir(cwd)
+    local items = fmt.build_items(
+      gitmod.get_branches("all", cwd, {}),
+      gitmod.get_worktree_data(cwd),
+      {},
+      gitmod.get_current_branch(cwd),
+      nil,
+      gitmod.get_local_upstreams(cwd)
+    )
+    for _, item in ipairs(items) do
+      if item.branch == branch then
+        act._do_switch({
+          wt_path = item.wt_path,
+          wt_branch = item.wt_branch,
+          display_path = item.display_path,
+          branch = item.branch,
+          ref = item.ref,
+          is_remote = item.is_remote,
+        }, false)
+      end
+    end
+    return asked
+  end
+
+  local function head_of(path)
+    return git({ "log", "-1", "--format=%s" }, path)
+  end
+
+  -- linked-remote holds a worktree; put it one commit behind its remote.
+  git({ "reset", "--hard", "origin/linked-remote~1" }, TMP .. "/clone-wt")
+
+  local prompts = switch_to("origin/linked-remote", 2)
+  check(
+    "the prompt says how far behind the worktree is",
+    (prompts[1] or ""):find("1 commit behind", 1, true) ~= nil,
+    vim.inspect(prompts[1])
+  )
+  check(
+    "and names the worktree holding it",
+    (prompts[1] or ""):find("has it checked out", 1, true) ~= nil,
+    vim.inspect(prompts[1])
+  )
+  eq("declining leaves the worktree stale", head_of(TMP .. "/clone-wt"), "init")
+  eq("but still switches to it", vim.fn.getcwd(), vim.uv.fs_realpath(TMP .. "/clone-wt"))
+
+  switch_to("origin/linked-remote", 1)
+  eq("accepting brings it up to the remote", head_of(TMP .. "/clone-wt"), "work on linked-remote")
+
+  prompts = switch_to("origin/linked-remote", 2)
+  eq("no prompt once it is up to date", #prompts, 0)
+
+  -- Uncommitted work there would be lost, so it is listed before asking.
+  git({ "reset", "--hard", "origin/linked-remote~1" }, TMP .. "/clone-wt")
+  write(TMP .. "/clone-wt/dirty.txt", "x\n")
+  prompts = switch_to("origin/linked-remote", 2)
+  check(
+    "the prompt lists uncommitted changes",
+    (prompts[1] or ""):find("uncommitted changes", 1, true) ~= nil,
+    vim.inspect(prompts[1])
+  )
+  check("naming the untracked file", (prompts[1] or ""):find("dirty.txt", 1, true) ~= nil, vim.inspect(prompts[1]))
+  eq("declining keeps it", vim.fn.filereadable(TMP .. "/clone-wt/dirty.txt"), 1)
+  vim.fn.delete(TMP .. "/clone-wt/dirty.txt")
+
+  -- A local row carries no remote to compare against.
+  prompts = switch_to("linked-remote", 2)
+  eq("no prompt for a local selection", #prompts, 0)
+
+  git({ "reset", "--hard", "origin/linked-remote" }, TMP .. "/clone-wt")
+  vim.fn.confirm = real_confirm
+end
+
+describe("10. branch info reports the worktree a row resolves to")
 do
   local act = require("git-worktrees.actions")
   local fmt = require("git-worktrees.format")

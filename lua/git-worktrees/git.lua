@@ -368,6 +368,21 @@ function M.count_ahead_behind(from_ref, to_ref, cwd)
   return tonumber(ahead), tonumber(behind)
 end
 
+---Hard-reset the worktree at `cwd` to another ref.
+---Used instead of `branch_reset_to` when the branch is checked out somewhere, which git
+---refuses to force-update. Untracked files are left alone; tracked changes are discarded.
+---@param to_ref string
+---@param cwd string
+---@return boolean ok
+---@return string|nil error
+function M.reset_worktree_to(to_ref, cwd)
+  local result = vim.system({ "git", "reset", "--hard", to_ref }, { text = true, cwd = cwd }):wait()
+  if result.code ~= 0 then
+    return false, result.stderr or "failed"
+  end
+  return true, nil
+end
+
 ---Move a local branch to another ref with `git branch -f`.
 ---Refuses (via git) when the branch is checked out in a worktree.
 ---@param branch_name string

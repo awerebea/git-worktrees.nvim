@@ -354,8 +354,11 @@ A remote branch whose local counterpart already exists behaves differently, beca
 - **The counterpart already has a worktree.** The remote row points at that worktree, so
   `<CR>` switches to it instead of failing with `fatal: 'x' is already used by worktree at ...`.
   Such rows are therefore listed by `:GitWorktreeManage` and left out of
-  `:GitWorktreeAdd`. The link comes from the branch's configured upstream, so it holds
-  even when the local branch is named differently from the remote branch it tracks. If
+  `:GitWorktreeAdd`. If that worktree is behind the remote branch, the plugin says so and
+  offers to reset it first, defaulting to no; the branch is checked out there, so the
+  reset is a `git reset --hard` in that worktree and any uncommitted changes are listed
+  in the prompt before you answer. The link comes from the branch's configured upstream,
+  so it holds even when the local branch is named differently from the branch it tracks. If
   several local branches track one remote branch and more than one has a worktree, the
   one named like the remote branch wins, and otherwise the alphabetically first - branch
   names are unique, so the choice never depends on ordering. Both rows show that

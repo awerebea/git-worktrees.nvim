@@ -161,6 +161,7 @@ function M.worktree_switch(picker, item)
   ---@type GitWorktrees.Snapshot
   local snapshot = vim.deepcopy({
     wt_path = item.wt_path,
+    wt_branch = item.wt_branch,
     display_path = item.display_path,
     branch = item.branch,
     ref = item.ref,
@@ -180,6 +181,7 @@ function M.worktree_switch_verbose(picker, item)
   ---@type GitWorktrees.Snapshot
   local snapshot = vim.deepcopy({
     wt_path = item.wt_path,
+    wt_branch = item.wt_branch,
     display_path = item.display_path,
     branch = item.branch,
     ref = item.ref,
@@ -197,6 +199,7 @@ end
 function M.worktree_switch_edit(picker, item)
   local snapshot = vim.deepcopy({
     wt_path = item.wt_path,
+    wt_branch = item.wt_branch,
     display_path = item.display_path,
     branch = item.branch,
     ref = item.ref,
@@ -214,6 +217,7 @@ end
 function M.worktree_switch_tabedit(picker, item)
   local snapshot = vim.deepcopy({
     wt_path = item.wt_path,
+    wt_branch = item.wt_branch,
     display_path = item.display_path,
     branch = item.branch,
     ref = item.ref,
@@ -231,6 +235,7 @@ end
 function M.worktree_switch_vsplit(picker, item)
   local snapshot = vim.deepcopy({
     wt_path = item.wt_path,
+    wt_branch = item.wt_branch,
     display_path = item.display_path,
     branch = item.branch,
     ref = item.ref,
@@ -248,6 +253,7 @@ end
 function M.worktree_switch_split(picker, item)
   local snapshot = vim.deepcopy({
     wt_path = item.wt_path,
+    wt_branch = item.wt_branch,
     display_path = item.display_path,
     branch = item.branch,
     ref = item.ref,
@@ -259,43 +265,23 @@ function M.worktree_switch_split(picker, item)
   end)
 end
 
----Core switch implementation. If the item already has a worktree, cds into it.
----Otherwise delegates to `_create_worktree`.
----@param item GitWorktrees.Snapshot
----@param force_prompt boolean Always prompt for worktree path when true.
----@param cmd_override? string Override for the file-open command (e.g. "vsplit").
-function M._do_switch(item, force_prompt, cmd_override)
-  local from_path = vim.fn.getcwd()
-
-  if item.wt_path then
-    local to_path = item.wt_path
-    if run_hook("before_switch", from_path, to_path) == false then
-      return
-    end
-    vim.fn.chdir(to_path)
-    vim.cmd("redrawstatus!")
-    notify("Switched to worktree: " .. item.display_path, vim.log.levels.INFO)
-    run_hook("on_switch", from_path, to_path)
-    swap_current_buffer(worktree_root_of(from_path), to_path, cmd_override)
-    return
-  end
-
-  M._create_worktree(item, force_prompt, function() end, cmd_override)
-end
-
 ---Offer to bring a stale local branch up to the remote branch the user actually picked.
 ---
----`git worktree add <path> <branch>` resolves the name to an existing local branch, so
----selecting a remote row whose local counterpart already exists silently checks out that
----local branch's state rather than the remote's. Only the behind count matters here: an
----up-to-date or purely-ahead branch has nothing stale to report.
+---Selecting a remote row lands on its local counterpart either way: on the worktree that
+---already has it checked out, or on a new one, since `git worktree add <path> <branch>`
+---resolves the name to the existing local branch. Both can hold state older than the
+---remote's, silently. Only the behind count matters: an up-to-date or purely-ahead branch
+---has nothing stale to report.
 ---
 ---Compares against the ref that was selected rather than the branch's configured upstream,
 ---which may be a different remote entirely.
 ---@param item GitWorktrees.Snapshot
----@param branch_name string Local branch name the worktree will check out.
+---@param branch_name string Local branch the worktree has, or will have, checked out.
 ---@param cwd string
-local function offer_reset_to_remote(item, branch_name, cwd)
+---@param wt_path? string Worktree the branch is already checked out in, when there is one.
+---git refuses `git branch -f` on a checked-out branch, so the reset happens inside the
+---worktree instead, which also discards uncommitted changes there.
+local function offer_reset_to_remote(item, branch_name, cwd, wt_path)
   local git = require("git-worktrees.git")
   if not item.is_remote or not item.ref then
     return
@@ -314,7 +300,12 @@ local function offer_reset_to_remote(item, branch_name, cwd)
     .. (behind == 1 and " commit" or " commits")
     .. " behind "
     .. item.branch
-    .. ".\nThe new worktree checks out the local branch, so it would not have the remote's state."
+    .. ".\n"
+  if wt_path then
+    msg = msg .. "The worktree " .. wt_path .. " has it checked out, so it does not have the remote's state."
+  else
+    msg = msg .. "The new worktree checks out the local branch, so it would not have the remote's state."
+  end
   if ahead and ahead > 0 then
     msg = msg
       .. "\nResetting discards "
@@ -322,18 +313,55 @@ local function offer_reset_to_remote(item, branch_name, cwd)
       .. (ahead == 1 and " local commit that is" or " local commits that are")
       .. " not on the remote."
   end
-  msg = msg .. "\nReset '" .. branch_name .. "' to " .. item.branch .. "?"
+  local dirty = wt_path and git.get_status_with_untracked(wt_path) or ""
+  if dirty ~= "" then
+    msg = msg .. "\n\nIt also discards these uncommitted changes:\n" .. dirty
+  end
+  msg = msg .. "\n\nReset '" .. branch_name .. "' to " .. item.branch .. "?"
 
   if vim.fn.confirm(msg, "&Yes\n&No", 2) ~= 1 then
     return
   end
 
-  local ok, err = git.branch_reset_to(branch_name, item.ref, cwd)
+  local ok, err
+  if wt_path then
+    ok, err = git.reset_worktree_to(item.ref, wt_path)
+  else
+    ok, err = git.branch_reset_to(branch_name, item.ref, cwd)
+  end
   if ok then
     notify("Reset " .. branch_name .. " to " .. item.branch, vim.log.levels.INFO)
   else
     notify("git-worktrees: could not reset '" .. branch_name .. "': " .. (err or "failed"), vim.log.levels.ERROR)
   end
+end
+
+---Core switch implementation. If the item already has a worktree, cds into it.
+---Otherwise delegates to `_create_worktree`.
+---@param item GitWorktrees.Snapshot
+---@param force_prompt boolean Always prompt for worktree path when true.
+---@param cmd_override? string Override for the file-open command (e.g. "vsplit").
+function M._do_switch(item, force_prompt, cmd_override)
+  local from_path = vim.fn.getcwd()
+
+  if item.wt_path then
+    local to_path = item.wt_path
+    if run_hook("before_switch", from_path, to_path) == false then
+      return
+    end
+    -- The worktree may already be behind the remote branch that was selected.
+    if item.wt_branch then
+      offer_reset_to_remote(item, item.wt_branch, from_path, to_path)
+    end
+    vim.fn.chdir(to_path)
+    vim.cmd("redrawstatus!")
+    notify("Switched to worktree: " .. item.display_path, vim.log.levels.INFO)
+    run_hook("on_switch", from_path, to_path)
+    swap_current_buffer(worktree_root_of(from_path), to_path, cmd_override)
+    return
+  end
+
+  M._create_worktree(item, force_prompt, function() end, cmd_override)
 end
 
 ---Prompt for (or derive) a worktree path, run `git worktree add`, then switch.
