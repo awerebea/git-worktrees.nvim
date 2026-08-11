@@ -287,14 +287,18 @@ For bare repos named `<name>.git`, `{repo_name}` keeps the `.git` suffix and
 `{repo_name_short}` drops it. Regular repos' working-tree directories rarely end in
 `.git`, so the two placeholders are usually identical there.
 
-## Default Keymaps (registered by setup when enable_default_keymaps = true)
+## Default Keymaps
 
-| Key           | Action                                                        |
-| ------------- | ------------------------------------------------------------- |
-| `<leader>gwt` | All branches - switch to or create a worktree                 |
-| `<leader>gwa` | Branches without a worktree - create one                      |
-| `<leader>gwm` | Branches with a worktree - jump between or delete             |
-| `<leader>gbm` | All branches - switch HEAD, delete, or fork (no worktree ops) |
+Registered by setup when <code>enable_default_keymaps&nbsp;=&nbsp;true</code>
+
+| Key           | Runs                                                   |
+| ------------- | ------------------------------------------------------ |
+| `<leader>gwt` | **G**it **W**orktree **T**otal - `:GitWorktreeTotal`   |
+| `<leader>gwa` | **G**it **W**orktree **A**dd - `:GitWorktreeAdd`       |
+| `<leader>gwm` | **G**it **W**orktree **M**anage - `:GitWorktreeManage` |
+| `<leader>gbm` | **G**it **B**ranch **M**anage - `:GitBranchManage`     |
+
+See [User Commands](#user-commands) below for what each one does.
 
 ## User Commands
 
@@ -304,6 +308,8 @@ For bare repos named `<name>.git`, `{repo_name}` keeps the `.git` suffix and
 | `:GitWorktreeAdd`    | Only branches **without** a worktree. Create a worktree, fork the branch, or delete it (simple or extended).                                    |
 | `:GitWorktreeManage` | Only branches **with** a worktree. Jump between worktrees, delete one (simple or extended), or fork to a new branch + worktree.                 |
 | `:GitBranchManage`   | All branches. Switch HEAD, delete (local-only, remote-only, or full local+remote), or fork a branch.                                            |
+
+Each command has a matching Lua function - see [API](#api) below.
 
 ## In-picker Keybindings
 
@@ -549,10 +555,10 @@ hooks = {
 local gw = require("git-worktrees")
 
 gw.setup(opts)              -- initialize with config
-gw.worktrees(opts?)         -- open worktree total picker
-gw.worktrees_add(opts?)     -- open add-worktree picker (no_worktree filter)
-gw.worktrees_manage(opts?)  -- open manage-worktrees picker (has_worktree filter)
-gw.branches(opts?)          -- open branch management picker
+gw.worktrees(opts?)         -- same as :GitWorktreeTotal
+gw.worktrees_add(opts?)     -- same as :GitWorktreeAdd
+gw.worktrees_manage(opts?)  -- same as :GitWorktreeManage
+gw.branches(opts?)          -- same as :GitBranchManage
 ```
 
 Each function accepts an optional `opts` table that overrides the global config for
