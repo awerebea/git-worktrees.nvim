@@ -312,6 +312,77 @@ function M.get_worktree_root(cwd)
   return out ~= "" and out or nil
 end
 
+---@class GitWorktrees.LocalBranchRef
+---@field ref string Full ref of the local branch (e.g. "refs/heads/feat/foo").
+---@field name string Short branch name (e.g. "feat/foo").
+
+---Map every remote-tracking ref to the local branches configured to track it.
+---
+---A worktree always checks out a local branch, so a remote-tracking ref never appears in
+---`wt_map`. This is what links the two: it is the branch's configured upstream, which
+---stays correct when a local branch is named differently from the remote branch it
+---tracks - something name-matching alone cannot see.
+---
+---Lists are sorted by branch name so callers get a stable order.
+---@param cwd string
+---@return table<string, GitWorktrees.LocalBranchRef[]>
+function M.get_local_upstreams(cwd)
+  local sep = "\x1f"
+  local out = run({ "git", "for-each-ref", "--format=%(refname)" .. sep .. "%(upstream)", "refs/heads" }, cwd)
+  ---@type table<string, GitWorktrees.LocalBranchRef[]>
+  local map = {}
+  if not out then
+    return map
+  end
+  for line in out:gmatch("[^\n]+") do
+    local ref, upstream = line:match("^(.-)" .. sep .. "(.*)$")
+    if ref and upstream and upstream ~= "" then
+      local name = ref:match("^refs/heads/(.+)")
+      if name then
+        map[upstream] = map[upstream] or {}
+        table.insert(map[upstream], { ref = ref, name = name })
+      end
+    end
+  end
+  for _, list in pairs(map) do
+    table.sort(list, function(a, b)
+      return a.name < b.name
+    end)
+  end
+  return map
+end
+
+---Count commits that separate two refs.
+---Returns nil when either ref cannot be resolved (e.g. the local branch does not exist).
+---@param from_ref string
+---@param to_ref string
+---@param cwd string
+---@return integer|nil ahead Commits in `from_ref` that are not in `to_ref`.
+---@return integer|nil behind Commits in `to_ref` that are not in `from_ref`.
+function M.count_ahead_behind(from_ref, to_ref, cwd)
+  local out = run({ "git", "rev-list", "--left-right", "--count", from_ref .. "..." .. to_ref }, cwd)
+  if not out then
+    return nil, nil
+  end
+  local ahead, behind = out:match("^(%d+)%s+(%d+)")
+  return tonumber(ahead), tonumber(behind)
+end
+
+---Move a local branch to another ref with `git branch -f`.
+---Refuses (via git) when the branch is checked out in a worktree.
+---@param branch_name string
+---@param to_ref string
+---@param cwd string
+---@return boolean ok
+---@return string|nil error
+function M.branch_reset_to(branch_name, to_ref, cwd)
+  local result = vim.system({ "git", "branch", "-f", branch_name, to_ref }, { text = true, cwd = cwd }):wait()
+  if result.code ~= 0 then
+    return false, result.stderr or "failed"
+  end
+  return true, nil
+end
+
 ---Return the current HEAD ref (e.g. "refs/heads/main"), or nil for a detached HEAD.
 ---@param cwd string
 ---@return string|nil

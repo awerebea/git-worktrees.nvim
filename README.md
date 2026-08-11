@@ -348,6 +348,24 @@ creates a new local branch tracking it, checked out into the new worktree. This 
 fastest way to start working on a colleague's branch: cycle to `"remote"` or `"all"`,
 find the branch, press `<CR>`.
 
+A remote branch whose local counterpart already exists behaves differently, because
+`git worktree add` resolves a branch name to the existing local branch:
+
+- **The counterpart already has a worktree.** The remote row points at that worktree, so
+  `<CR>` switches to it instead of failing with `fatal: 'x' is already used by worktree at ...`.
+  Such rows are therefore listed by `:GitWorktreeManage` and left out of
+  `:GitWorktreeAdd`. The link comes from the branch's configured upstream, so it holds
+  even when the local branch is named differently from the remote branch it tracks. If
+  several local branches track one remote branch and more than one has a worktree, the
+  one named like the remote branch wins, and otherwise the alphabetically first - branch
+  names are unique, so the choice never depends on ordering.
+- **The counterpart exists but is behind the remote.** The new worktree would check out
+  the local branch and so would not contain the remote's state. The plugin says how far
+  behind it is and offers to reset the local branch to the remote branch first,
+  defaulting to no; declining creates the worktree from the local branch as before. If
+  the local branch also has commits the remote does not, the prompt says how many would
+  be discarded.
+
 ## Submodules
 
 Worktrees are not supported for git submodules. When the repository you are working in is

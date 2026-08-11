@@ -66,6 +66,13 @@ end
 ---   super/            superproject
 ---     lib/            ordinary directory belonging to super
 ---     sub/            submodule (a clone of ordinary), with a src/ subdirectory
+---
+---   remote.git/       bare origin for the clone below
+---   clone/            clone of remote.git, used for the remote-branch tests:
+---     linked-remote     local branch with a worktree at clone-wt/, tracks origin/linked-remote
+---     stale             local branch tracking origin/stale, one commit behind it
+---     twin-a, twin-b    two local branches both tracking origin/twin-a
+---     (origin/orphan)   remote branch with no local counterpart
 local function build_fixtures()
   local function init(path)
     vim.fn.mkdir(path, "p")
@@ -92,6 +99,39 @@ local function build_fixtures()
   git({ "commit", "-qm", "init" }, TMP .. "/super")
   git({ "-c", "protocol.file.allow=always", "submodule", "add", "-q", TMP .. "/ordinary", "sub" }, TMP .. "/super")
   git({ "commit", "-qm", "add submodule" }, TMP .. "/super")
+
+  -- A clone with remote-tracking branches, for the remote-row tests.
+  git({ "init", "-q", "--bare", TMP .. "/remote.git" })
+  init(TMP .. "/seed")
+  write(TMP .. "/seed/base.txt", "base\n")
+  git({ "add", "-A" }, TMP .. "/seed")
+  git({ "commit", "-qm", "init" }, TMP .. "/seed")
+  git({ "remote", "add", "origin", TMP .. "/remote.git" }, TMP .. "/seed")
+  git({ "push", "-q", "-u", "origin", "main" }, TMP .. "/seed")
+  for _, branch in ipairs({ "linked-remote", "stale", "twin-a", "orphan" }) do
+    git({ "checkout", "-q", "-b", branch, "main" }, TMP .. "/seed")
+    write(TMP .. "/seed/" .. branch .. ".txt", branch .. "\n")
+    git({ "add", "-A" }, TMP .. "/seed")
+    git({ "commit", "-qm", "work on " .. branch }, TMP .. "/seed")
+    git({ "push", "-q", "-u", "origin", branch }, TMP .. "/seed")
+  end
+
+  git({ "clone", "-q", TMP .. "/remote.git", TMP .. "/clone" })
+  git({ "config", "user.email", "test@example.com" }, TMP .. "/clone")
+  git({ "config", "user.name", "test" }, TMP .. "/clone")
+
+  -- Local counterpart that owns a worktree.
+  git({ "branch", "-q", "linked-remote", "origin/linked-remote" }, TMP .. "/clone")
+  git({ "worktree", "add", "-q", TMP .. "/clone-wt", "linked-remote" }, TMP .. "/clone")
+  -- Local counterpart with no worktree, deliberately one commit behind its remote.
+  git({ "branch", "-q", "stale", "origin/stale~1" }, TMP .. "/clone")
+  git({ "branch", "-q", "--set-upstream-to=origin/stale", "stale" }, TMP .. "/clone")
+  -- Two local branches tracking one remote branch, both with worktrees.
+  git({ "branch", "-q", "twin-a", "origin/twin-a" }, TMP .. "/clone")
+  git({ "branch", "-q", "twin-b", "origin/twin-a" }, TMP .. "/clone")
+  git({ "branch", "-q", "--set-upstream-to=origin/twin-a", "twin-b" }, TMP .. "/clone")
+  git({ "worktree", "add", "-q", TMP .. "/clone-wt-a", "twin-a" }, TMP .. "/clone")
+  git({ "worktree", "add", "-q", TMP .. "/clone-wt-b", "twin-b" }, TMP .. "/clone")
 end
 
 --------------------------------------------------------------------------------
@@ -308,6 +348,206 @@ do
     vim.bo.buftype = "nofile"
     eq("special buffers fall back to the cwd", (worktree_picker()), true)
   end)
+end
+
+describe("6. remote rows resolve to their local counterpart's worktree")
+do
+  local fmt = require("git-worktrees.format")
+
+  --- Build the picker rows for the clone, keyed by branch name.
+  ---@return table<string, GitWorktrees.Item>
+  local function rows()
+    local cwd = TMP .. "/clone"
+    local wt = gitmod.get_worktree_data(cwd)
+    local items = fmt.build_items(
+      gitmod.get_branches("all", cwd, {}),
+      wt,
+      { wt_path_display = "absolute" },
+      gitmod.get_current_branch(cwd),
+      nil,
+      gitmod.get_local_upstreams(cwd)
+    )
+    local by_name = {}
+    for _, item in ipairs(items) do
+      by_name[item.branch] = item
+    end
+    return by_name
+  end
+
+  local by_name = rows()
+
+  eq(
+    "a remote row points at its counterpart's worktree",
+    by_name["origin/linked-remote"].wt_path,
+    vim.uv.fs_realpath(TMP .. "/clone-wt")
+  )
+  eq(
+    "and records the local branch that owns it",
+    by_name["origin/linked-remote"].wt_branch,
+    "linked-remote"
+  )
+  eq(
+    "the local row still points at the same worktree",
+    by_name["linked-remote"].wt_path,
+    vim.uv.fs_realpath(TMP .. "/clone-wt")
+  )
+  eq("a remote row whose counterpart has no worktree stays empty", by_name["origin/stale"].wt_path, nil)
+  eq("a remote row with no local counterpart stays empty", by_name["origin/orphan"].wt_path, nil)
+  eq("a local row is its own worktree owner", by_name["twin-a"].wt_branch, "twin-a")
+
+  -- Many-to-one: twin-a and twin-b both track origin/twin-a and both have worktrees.
+  eq("the name-matching counterpart wins a tie", by_name["origin/twin-a"].wt_branch, "twin-a")
+  eq(
+    "and its worktree is the one reported",
+    by_name["origin/twin-a"].wt_path,
+    vim.uv.fs_realpath(TMP .. "/clone-wt-a")
+  )
+
+  -- Drop the name-matching branch's worktree; the alphabetical fallback takes over.
+  git({ "worktree", "remove", "--force", TMP .. "/clone-wt-a" }, TMP .. "/clone")
+  local after = rows()
+  eq("falls back when the name match has no worktree", after["origin/twin-a"].wt_branch, "twin-b")
+  eq(
+    "reporting the fallback's worktree",
+    after["origin/twin-a"].wt_path,
+    vim.uv.fs_realpath(TMP .. "/clone-wt-b")
+  )
+  git({ "worktree", "add", "-q", TMP .. "/clone-wt-a", "twin-a" }, TMP .. "/clone")
+end
+
+describe("7. filters follow the resolved worktree")
+do
+  local pickers_items
+  _G.Snacks.picker.pick = function(opts)
+    opened = opts.title or "picker"
+    pickers_items = opts.items
+  end
+
+  ---@return table<string, boolean>
+  local function branches_in(filter)
+    pickers_items = nil
+    in_context(TMP .. "/clone", nil, function()
+      local cfg = vim.tbl_deep_extend("force", require("git-worktrees").config, {
+        branch_type = "all",
+        filter = filter,
+      })
+      require("git-worktrees.pickers").worktrees(cfg)
+    end)
+    local present = {}
+    for _, item in ipairs(pickers_items or {}) do
+      present[item.branch] = true
+    end
+    return present
+  end
+
+  local add = branches_in("no_worktree")
+  eq("remote row with a worktree is not offered in Add", add["origin/linked-remote"], nil)
+  eq("remote row without a worktree is still offered in Add", add["origin/stale"], true)
+  eq("remote row with no counterpart is still offered in Add", add["origin/orphan"], true)
+
+  local manage = branches_in("has_worktree")
+  eq("remote row with a worktree appears in Manage", manage["origin/linked-remote"], true)
+  eq("remote row without a worktree stays out of Manage", manage["origin/stale"], nil)
+  eq("local rows with worktrees still appear in Manage", manage["linked-remote"], true)
+end
+
+describe("8. a stale local counterpart is reported before the worktree is created")
+do
+  local act = require("git-worktrees.actions")
+  local asked, answer
+
+  local real_confirm = vim.fn.confirm
+  ---@diagnostic disable-next-line: duplicate-set-field
+  vim.fn.confirm = function(msg)
+    asked[#asked + 1] = msg
+    return answer
+  end
+  local real_input = vim.ui.input
+  ---@diagnostic disable-next-line: duplicate-set-field
+  vim.ui.input = function(opts, on_confirm)
+    on_confirm(opts.default)
+  end
+
+  --- Select a remote row and create its worktree, answering the reset prompt with `reply`.
+  ---@param branch string Remote branch name, e.g. "origin/stale".
+  ---@param reply integer 1 = yes, 2 = no.
+  ---@return string[] prompts
+  local function create_from_remote(branch, reply)
+    asked, answer = {}, reply
+    local cwd = TMP .. "/clone"
+    vim.fn.chdir(cwd)
+    local wt = gitmod.get_worktree_data(cwd)
+    local items = require("git-worktrees.format").build_items(
+      gitmod.get_branches("all", cwd, {}),
+      wt,
+      {},
+      gitmod.get_current_branch(cwd),
+      nil,
+      gitmod.get_local_upstreams(cwd)
+    )
+    local item
+    for _, candidate in ipairs(items) do
+      if candidate.branch == branch then
+        item = candidate
+      end
+    end
+    -- Absolute, so the created path does not depend on where the git common dir is.
+    require("git-worktrees").setup({ auto_worktree_path = true, wt_base_path_regular = TMP .. "/made" })
+    act._do_switch({
+      wt_path = item.wt_path,
+      wt_branch = item.wt_branch,
+      display_path = item.display_path,
+      branch = item.branch,
+      ref = item.ref,
+      is_remote = item.is_remote,
+    }, false)
+    return asked
+  end
+
+  local function head_of(path)
+    return git({ "log", "-1", "--format=%s" }, path)
+  end
+
+  local function reset_stale()
+    vim.fn.chdir(TMP .. "/clone")
+    pcall(git, { "worktree", "remove", "--force", TMP .. "/made/stale" }, TMP .. "/clone")
+    vim.fn.delete(TMP .. "/made", "rf")
+    git({ "worktree", "prune" }, TMP .. "/clone")
+    git({ "branch", "-f", "stale", "origin/stale~1" }, TMP .. "/clone")
+  end
+
+  reset_stale()
+  local prompts = create_from_remote("origin/stale", 2)
+  check("declining still creates the worktree", vim.fn.isdirectory(TMP .. "/made/stale") == 1)
+  check(
+    "the prompt reports how far behind the local branch is",
+    (prompts[1] or ""):find("1 commit behind origin/stale", 1, true) ~= nil,
+    vim.inspect(prompts[1])
+  )
+  eq("declining keeps the local branch's state", head_of(TMP .. "/made/stale"), "init")
+
+  reset_stale()
+  create_from_remote("origin/stale", 1)
+  eq("accepting resets the branch to the remote", head_of(TMP .. "/made/stale"), "work on stale")
+
+  -- No local counterpart: git creates a tracking branch at the remote tip, no prompt.
+  vim.fn.chdir(TMP .. "/clone")
+  pcall(git, { "worktree", "remove", "--force", TMP .. "/made/orphan" }, TMP .. "/clone")
+  local orphan_prompts = create_from_remote("origin/orphan", 2)
+  eq("no prompt when there is no local counterpart", #orphan_prompts, 0)
+  eq("the worktree gets the remote state", head_of(TMP .. "/made/orphan"), "work on orphan")
+
+  -- Up-to-date counterpart: nothing stale to report. The worktree has to go first, since
+  -- git refuses to force-update a branch that is checked out somewhere.
+  vim.fn.chdir(TMP .. "/clone")
+  pcall(git, { "worktree", "remove", "--force", TMP .. "/made/stale" }, TMP .. "/clone")
+  git({ "worktree", "prune" }, TMP .. "/clone")
+  git({ "branch", "-f", "stale", "origin/stale" }, TMP .. "/clone")
+  local fresh_prompts = create_from_remote("origin/stale", 2)
+  eq("no prompt when the counterpart is up to date", #fresh_prompts, 0)
+
+  vim.fn.confirm = real_confirm
+  vim.ui.input = real_input
 end
 
 --------------------------------------------------------------------------------

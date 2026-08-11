@@ -3,6 +3,8 @@
 ---@field branch string Short branch name shown in the picker.
 ---@field ref string Full git ref (e.g. "refs/heads/main").
 ---@field wt_path string|nil Absolute path to the checked-out worktree, nil when none.
+---@field wt_branch string|nil Local branch the worktree belongs to. Same as `branch` for a
+---local row; for a remote row it is the tracking local branch that owns the worktree.
 ---@field display_path string Formatted worktree path for display; empty string when no worktree.
 ---@field is_remote boolean True for remote-tracking branches.
 ---@field is_current boolean True when this branch is the current HEAD.
@@ -134,6 +136,51 @@ function M.format_path(abs_path, mode, git_common_dir, wt_base_path, git_root)
   return M.tilde_path(abs_path)
 end
 
+---Find the worktree belonging to a remote branch's local counterpart.
+---
+---Worktrees check out local branches, so a remote-tracking ref is never a key in `wt_map`
+---and a remote row would otherwise always look worktree-less, however many of its tracking
+---branches are checked out.
+---
+---Several local branches may track one remote branch, so the winner is chosen by a rule
+---that cannot tie: among the counterparts that actually have a worktree, the one named
+---like the remote branch wins - branch names are unique, so at most one can match - and
+---otherwise the alphabetically first, which is a total order over distinct names.
+---@param branch GitWorktrees.Branch
+---@param wt_data GitWorktrees.WorktreeData
+---@param upstream_map table<string, GitWorktrees.LocalBranchRef[]>|nil
+---@return string|nil wt_path
+---@return string|nil wt_branch Name of the local branch that owns the worktree.
+local function remote_counterpart_worktree(branch, wt_data, upstream_map)
+  local candidates = upstream_map and upstream_map[branch.ref]
+  if not candidates then
+    return nil, nil
+  end
+
+  ---@type GitWorktrees.LocalBranchRef[]
+  local with_worktree = {}
+  for _, candidate in ipairs(candidates) do
+    if wt_data.wt_map[candidate.ref] then
+      with_worktree[#with_worktree + 1] = candidate
+    end
+  end
+  if #with_worktree == 0 then
+    return nil, nil
+  end
+
+  local same_name = branch.name:match("[^/]+/(.+)")
+  table.sort(with_worktree, function(a, b)
+    local a_matches, b_matches = a.name == same_name, b.name == same_name
+    if a_matches ~= b_matches then
+      return a_matches
+    end
+    return a.name < b.name
+  end)
+
+  local winner = with_worktree[1]
+  return wt_data.wt_map[winner.ref], winner.name
+end
+
 ---Build picker items by joining branch data with worktree data.
 ---The returned items are consumed by pickers and actions but never modified.
 ---@param branches GitWorktrees.Branch[]
@@ -141,12 +188,17 @@ end
 ---@param config GitWorktrees.Config
 ---@param current_ref string|nil Full ref of the current HEAD branch.
 ---@param wt_base_path? string Expanded worktree base path; required for relative-wt-base display mode.
+---@param upstream_map? table<string, GitWorktrees.LocalBranchRef[]> Remote ref -> tracking local branches.
 ---@return GitWorktrees.Item[]
-function M.build_items(branches, wt_data, config, current_ref, wt_base_path)
+function M.build_items(branches, wt_data, config, current_ref, wt_base_path, upstream_map)
   ---@type GitWorktrees.Item[]
   local items = {}
   for _, branch in ipairs(branches) do
     local wt_path = wt_data.wt_map[branch.ref]
+    local wt_branch = wt_path and branch.name or nil
+    if not wt_path and branch.is_remote then
+      wt_path, wt_branch = remote_counterpart_worktree(branch, wt_data, upstream_map)
+    end
     local display_path =
       M.format_path(wt_path, config.wt_path_display, wt_data.git_common_dir, wt_base_path, wt_data.git_root)
 
@@ -156,6 +208,7 @@ function M.build_items(branches, wt_data, config, current_ref, wt_base_path)
       branch = branch.name,
       ref = branch.ref,
       wt_path = wt_path,
+      wt_branch = wt_branch,
       display_path = display_path,
       is_remote = branch.is_remote,
       is_current = branch.ref == current_ref,

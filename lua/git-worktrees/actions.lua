@@ -1,5 +1,6 @@
 ---@class GitWorktrees.Snapshot
 ---@field wt_path string|nil
+---@field wt_branch string|nil Local branch the worktree belongs to; differs from `branch` on a remote row.
 ---@field display_path string
 ---@field branch string
 ---@field ref string
@@ -282,6 +283,62 @@ function M._do_switch(item, force_prompt, cmd_override)
   M._create_worktree(item, force_prompt, function() end, cmd_override)
 end
 
+---Offer to bring a stale local branch up to the remote branch the user actually picked.
+---
+---`git worktree add <path> <branch>` resolves the name to an existing local branch, so
+---selecting a remote row whose local counterpart already exists silently checks out that
+---local branch's state rather than the remote's. Only the behind count matters here: an
+---up-to-date or purely-ahead branch has nothing stale to report.
+---
+---Compares against the ref that was selected rather than the branch's configured upstream,
+---which may be a different remote entirely.
+---@param item GitWorktrees.Snapshot
+---@param branch_name string Local branch name the worktree will check out.
+---@param cwd string
+local function offer_reset_to_remote(item, branch_name, cwd)
+  local git = require("git-worktrees.git")
+  if not item.is_remote or not item.ref then
+    return
+  end
+
+  local local_ref = "refs/heads/" .. branch_name
+  local ahead, behind = git.count_ahead_behind(local_ref, item.ref, cwd)
+  if not behind or behind == 0 then
+    return
+  end
+
+  local msg = "Local branch '"
+    .. branch_name
+    .. "' is "
+    .. behind
+    .. (behind == 1 and " commit" or " commits")
+    .. " behind "
+    .. item.branch
+    .. ".\nThe new worktree checks out the local branch, so it would not have the remote's state."
+  if ahead and ahead > 0 then
+    msg = msg
+      .. "\nResetting discards "
+      .. ahead
+      .. (ahead == 1 and " local commit that is" or " local commits that are")
+      .. " not on the remote."
+  end
+  msg = msg .. "\nReset '" .. branch_name .. "' to " .. item.branch .. "?"
+
+  if vim.fn.confirm(msg, "&Yes\n&No", 2) ~= 1 then
+    return
+  end
+
+  local ok, err = git.branch_reset_to(branch_name, item.ref, cwd)
+  if ok then
+    notify("Reset " .. branch_name .. " to " .. item.branch, vim.log.levels.INFO)
+  else
+    notify(
+      "git-worktrees: could not reset '" .. branch_name .. "': " .. (err or "failed"),
+      vim.log.levels.ERROR
+    )
+  end
+end
+
 ---Prompt for (or derive) a worktree path, run `git worktree add`, then switch.
 ---Calls on_done with the created worktree path on success, or nil on failure/cancellation.
 ---Callers that fork a branch first must handle the nil case in on_done (clean up orphans).
@@ -328,6 +385,8 @@ function M._create_worktree(item, force_prompt, on_done, cmd_override)
       on_done(nil)
       return
     end
+
+    offer_reset_to_remote(item, branch_name, cwd)
 
     local ok, err = git.worktree_add(wt_path, branch_name, cwd)
     if not ok then
@@ -378,6 +437,7 @@ function M.worktree_delete(picker, item)
   ---@type GitWorktrees.Snapshot
   local snapshot = vim.deepcopy({
     wt_path = item.wt_path,
+    wt_branch = item.wt_branch,
     display_path = item.display_path,
     branch = item.branch,
     is_remote = item.is_remote,
@@ -395,6 +455,7 @@ function M.worktree_delete_extended(picker, item)
   ---@type GitWorktrees.Snapshot
   local snapshot = vim.deepcopy({
     wt_path = item.wt_path,
+    wt_branch = item.wt_branch,
     display_path = item.display_path,
     branch = item.branch,
     is_remote = item.is_remote,
@@ -455,6 +516,16 @@ local function show_status_win(wt_path, title)
   return win
 end
 
+---Name of the branch a worktree actually has checked out.
+---On a remote row that is the tracking local branch, not the remote branch itself: git
+---never checks out a remote-tracking ref, so saying "for branch 'origin/x'" would name a
+---branch that has no worktree.
+---@param item GitWorktrees.Snapshot
+---@return string
+local function worktree_branch(item)
+  return item.wt_branch or item.branch
+end
+
 ---@param item GitWorktrees.Snapshot
 function M._do_worktree_delete(item)
   local git = require("git-worktrees.git")
@@ -470,7 +541,11 @@ function M._do_worktree_delete(item)
   end
 
   local choice =
-    vim.fn.confirm("Delete worktree: " .. item.display_path .. "\nfor branch '" .. item.branch .. "'?", "&Yes\n&No", 2)
+    vim.fn.confirm(
+      "Delete worktree: " .. item.display_path .. "\nfor branch '" .. worktree_branch(item) .. "'?",
+      "&Yes\n&No",
+      2
+    )
   if choice ~= 1 then
     return
   end
@@ -500,7 +575,7 @@ function M._do_worktree_delete(item)
     end
   end
 
-  run_hook("on_delete", item.branch, item.wt_path)
+  run_hook("on_delete", worktree_branch(item), item.wt_path)
   notify("Deleted worktree: " .. item.display_path, vim.log.levels.INFO)
 
   if not item.is_remote then
@@ -523,7 +598,7 @@ function M._do_worktree_delete_extended(item)
     end
 
     local choice = vim.fn.confirm(
-      "Delete worktree: " .. item.display_path .. "\nfor branch '" .. item.branch .. "'?",
+      "Delete worktree: " .. item.display_path .. "\nfor branch '" .. worktree_branch(item) .. "'?",
       "&Yes\n&No",
       2
     )
@@ -554,7 +629,7 @@ function M._do_worktree_delete_extended(item)
         return
       end
     end
-    run_hook("on_delete", item.branch, item.wt_path)
+    run_hook("on_delete", worktree_branch(item), item.wt_path)
     notify("Deleted worktree: " .. item.display_path, vim.log.levels.INFO)
   end
 
