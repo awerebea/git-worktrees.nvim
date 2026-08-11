@@ -348,6 +348,32 @@ creates a new local branch tracking it, checked out into the new worktree. This 
 fastest way to start working on a colleague's branch: cycle to `"remote"` or `"all"`,
 find the branch, press `<CR>`.
 
+## Submodules
+
+Worktrees are not supported for git submodules. When the repository you are working in is
+a submodule of another repository, the worktree pickers warn and do nothing:
+
+```text
+git-worktrees: this repository is a submodule of
+/Users/me/Work/my-project
+Worktrees are not supported for submodules - skipping.
+Clone the submodule as a standalone repository to use worktrees with it.
+```
+
+The reason is that a submodule's git directory lives inside the superproject's, at
+`<super>/.git/modules/<name>`. Since worktree base paths are anchored to the git common
+directory, worktrees created from a submodule would land under the superproject's `.git`,
+where normal tooling will not see them and `git submodule deinit` will delete them.
+
+If you need worktrees for a repository that is used as a submodule somewhere, clone it on
+its own and work in that standalone clone.
+
+The repository is determined from the current buffer's file rather than from the cwd, so
+opening `<super>/sub/file.lua` while the cwd is at `<super>` is recognised as the
+submodule `sub`, not as the superproject. Working in the superproject itself is
+unaffected, and so are ordinary and bare repositories. `:GitBranchManage` performs no
+worktree operations and keeps working everywhere.
+
 ## Stash Transfer When Forking
 
 When you press `<M-n>` to fork a branch from a worktree picker and the current worktree

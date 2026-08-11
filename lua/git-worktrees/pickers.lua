@@ -134,6 +134,60 @@ local function compute_layout(items, win_w, has_path)
   }
 end
 
+---Directories whose repositories decide whether this is a submodule.
+---
+---Both matter. The pickers operate on the repository at the cwd, so a cwd inside a
+---submodule must be caught. And the current buffer's file is what the user is actually
+---working on: with the cwd at a superproject root, a buffer visiting `<super>/sub/file.lua`
+---belongs to the submodule rather than to the superproject that merely contains its
+---directory. Buffers with no file on disk (pickers, terminals, unnamed) contribute nothing.
+---@return string[]
+local function repo_dirs()
+  ---@type string[]
+  local dirs = {}
+  local buf = vim.api.nvim_get_current_buf()
+  if vim.bo[buf].buftype == "" then
+    local name = vim.api.nvim_buf_get_name(buf)
+    if name ~= "" then
+      local dir = vim.fs.dirname(name)
+      if dir and dir ~= "" and vim.fn.isdirectory(dir) == 1 then
+        dirs[#dirs + 1] = dir
+      end
+    end
+  end
+  local cwd = vim.fn.getcwd()
+  if dirs[1] ~= cwd then
+    dirs[#dirs + 1] = cwd
+  end
+  return dirs
+end
+
+---Warn and return true when the current repository is a submodule of another repository.
+---
+---Worktrees are not supported there: a submodule's git directory lives inside the
+---superproject's (`<super>/.git/modules/<name>`), so worktrees created from it would end
+---up under the superproject's `.git`, invisible to normal tooling and removed by
+---`git submodule deinit`. Cloning the submodule standalone is the way to get worktrees
+---for it.
+---@return boolean refused True when the caller must stop without doing anything.
+local function refuse_in_submodule()
+  local git = require("git-worktrees.git")
+  for _, dir in ipairs(repo_dirs()) do
+    local superproject = git.get_superproject_root(dir)
+    if superproject then
+      notify(
+        "git-worktrees: this repository is a submodule of\n"
+          .. superproject
+          .. "\nWorktrees are not supported for submodules - skipping.\n"
+          .. "Clone the submodule as a standalone repository to use worktrees with it.",
+        vim.log.levels.WARN
+      )
+      return true
+    end
+  end
+  return false
+end
+
 ---Load branches, worktree data, the current HEAD ref, and the expanded worktree base path.
 ---@param config GitWorktrees.Config
 ---@return GitWorktrees.Branch[]|nil branches
@@ -183,6 +237,10 @@ end
 --- - `"has_worktree"` - branches with a checked-out worktree (:GitWorktreeManage)
 ---@param config GitWorktrees.Config
 function M.worktrees(config)
+  if refuse_in_submodule() then
+    return
+  end
+
   local branches, wt_data, current_ref, wt_base_path = load_data(config)
   if not branches then
     return
