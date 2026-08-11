@@ -332,10 +332,7 @@ local function offer_reset_to_remote(item, branch_name, cwd)
   if ok then
     notify("Reset " .. branch_name .. " to " .. item.branch, vim.log.levels.INFO)
   else
-    notify(
-      "git-worktrees: could not reset '" .. branch_name .. "': " .. (err or "failed"),
-      vim.log.levels.ERROR
-    )
+    notify("git-worktrees: could not reset '" .. branch_name .. "': " .. (err or "failed"), vim.log.levels.ERROR)
   end
 end
 
@@ -540,12 +537,11 @@ function M._do_worktree_delete(item)
     return
   end
 
-  local choice =
-    vim.fn.confirm(
-      "Delete worktree: " .. item.display_path .. "\nfor branch '" .. worktree_branch(item) .. "'?",
-      "&Yes\n&No",
-      2
-    )
+  local choice = vim.fn.confirm(
+    "Delete worktree: " .. item.display_path .. "\nfor branch '" .. worktree_branch(item) .. "'?",
+    "&Yes\n&No",
+    2
+  )
   if choice ~= 1 then
     return
   end

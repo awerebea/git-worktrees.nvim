@@ -381,11 +381,7 @@ do
     by_name["origin/linked-remote"].wt_path,
     vim.uv.fs_realpath(TMP .. "/clone-wt")
   )
-  eq(
-    "and records the local branch that owns it",
-    by_name["origin/linked-remote"].wt_branch,
-    "linked-remote"
-  )
+  eq("and records the local branch that owns it", by_name["origin/linked-remote"].wt_branch, "linked-remote")
   eq(
     "the local row still points at the same worktree",
     by_name["linked-remote"].wt_path,
@@ -397,21 +393,13 @@ do
 
   -- Many-to-one: twin-a and twin-b both track origin/twin-a and both have worktrees.
   eq("the name-matching counterpart wins a tie", by_name["origin/twin-a"].wt_branch, "twin-a")
-  eq(
-    "and its worktree is the one reported",
-    by_name["origin/twin-a"].wt_path,
-    vim.uv.fs_realpath(TMP .. "/clone-wt-a")
-  )
+  eq("and its worktree is the one reported", by_name["origin/twin-a"].wt_path, vim.uv.fs_realpath(TMP .. "/clone-wt-a"))
 
   -- Drop the name-matching branch's worktree; the alphabetical fallback takes over.
   git({ "worktree", "remove", "--force", TMP .. "/clone-wt-a" }, TMP .. "/clone")
   local after = rows()
   eq("falls back when the name match has no worktree", after["origin/twin-a"].wt_branch, "twin-b")
-  eq(
-    "reporting the fallback's worktree",
-    after["origin/twin-a"].wt_path,
-    vim.uv.fs_realpath(TMP .. "/clone-wt-b")
-  )
+  eq("reporting the fallback's worktree", after["origin/twin-a"].wt_path, vim.uv.fs_realpath(TMP .. "/clone-wt-b"))
   git({ "worktree", "add", "-q", TMP .. "/clone-wt-a", "twin-a" }, TMP .. "/clone")
 end
 
