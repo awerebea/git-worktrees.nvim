@@ -3,8 +3,9 @@
 -- Run from the repository root with:
 --   nvim --headless -l tests/run.lua
 --
--- Self-contained: builds throwaway git repositories in a temp directory and stubs the
--- Snacks picker, so it needs nothing beyond nvim and git. Exits non-zero on failure.
+-- Self-contained: builds throwaway git repositories in a temp directory and replaces
+-- the plugin's ui module with a fake, so it needs nothing beyond nvim and git - no
+-- picker backend has to be installed. Exits non-zero on failure.
 
 local root = vim.fn.fnamemodify(debug.getinfo(1, "S").source:sub(2), ":p:h:h")
 vim.opt.runtimepath:append(root)
@@ -140,21 +141,42 @@ end
 
 local opened, notifications
 
--- The pickers only ever reach Snacks after they decide to proceed, so recording the
--- pick() call is exactly the "did the operation run?" signal the tests need.
-_G.Snacks = {
-  picker = {
-    pick = function(opts)
-      opened = opts.title or "picker"
-    end,
-    files = function() end,
-    util = {
-      align = function(str)
-        return str
+--- Stand in for the picker backend.
+---
+--- Replaces git-worktrees.ui rather than the Snacks global: the seam is the plugin's own
+--- contract, so this fake does not have to track someone else's API, and no real backend
+--- has to be installed to run the suite. The pickers only reach it once they have decided
+--- to proceed, so recording the pick() call is exactly the "did the operation run?"
+--- signal the tests need.
+-- Declared before the table so the closures below capture this local rather than a
+-- nil global: inside `local x = {...}` the name x is not yet in scope.
+---@type table
+local ui
+ui = {
+  pick = function(opts)
+    opened = opts.title or "picker"
+    ui.last_pick = opts
+  end,
+  align = function(str)
+    return str
+  end,
+  query = function()
+    return ""
+  end,
+  browse_files = function() end,
+  popup = function(opts)
+    ui.last_popup = opts
+    return {
+      win_valid = function()
+        return false
       end,
-    },
-  },
+      close = function() end,
+      redraw = function() end,
+    }
+  end,
+  close_after = function() end,
 }
+package.loaded["git-worktrees.ui"] = ui
 
 vim.notify = function(msg)
   notifications[#notifications + 1] = tostring(msg)
@@ -218,6 +240,82 @@ do
   eq("a plain directory in the superproject is not a submodule", gitmod.get_superproject_root(TMP .. "/super/lib"), nil)
   eq("an ordinary repository is not a submodule", gitmod.get_superproject_root(TMP .. "/ordinary"), nil)
   eq("a bare repository is not a submodule", gitmod.get_superproject_root(TMP .. "/bare.git"), nil)
+end
+
+describe("0. the ui seam expands a flat key map for the backend")
+do
+  -- The fake above replaces the seam, so the seam's own logic would otherwise go
+  -- untested. Load a fresh copy of the real module and give it a recording backend.
+  local real_ui = dofile(root .. "/lua/git-worktrees/ui.lua")
+  local captured
+  local saved_snacks = _G.Snacks
+  _G.Snacks = {
+    picker = {
+      pick = function(opts)
+        captured = opts
+      end,
+    },
+  }
+
+  real_ui.pick({
+    title = "T",
+    items = {},
+    format = function() end,
+    actions = { act_a = function() end, act_b = function() end },
+    confirm = "act_a",
+    keys = { ["<C-x>"] = "act_a", ["<M-g>"] = "act_b" },
+  })
+
+  --- Report a missing binding as a value rather than indexing nil, so a dropped key
+  --- fails the check instead of aborting the run.
+  ---@param win "input"|"list"
+  ---@param lhs string
+  ---@return string
+  local function mode_of(win, lhs)
+    local w = captured.win and captured.win[win]
+    local key = w and w.keys and w.keys[lhs]
+    return key and table.concat(key.mode, "+") or "<missing>"
+  end
+  ---@param win "input"|"list"
+  ---@param lhs string
+  ---@return string
+  local function action_of(win, lhs)
+    local w = captured.win and captured.win[win]
+    local key = w and w.keys and w.keys[lhs]
+    return key and key[1] or "<missing>"
+  end
+  ---@param win "input"|"list"
+  ---@return integer
+  local function count(win)
+    local w = captured.win and captured.win[win]
+    local n = 0
+    for _ in pairs(w and w.keys or {}) do
+      n = n + 1
+    end
+    return n
+  end
+
+  eq("the title is passed through", captured.title, "T")
+  eq("confirm is passed through", captured.confirm, "act_a")
+  eq("preview is off", captured.layout and captured.layout.preview, false)
+  eq("input binds in insert and normal", mode_of("input", "<C-x>"), "i+n")
+  eq("list binds in normal only", mode_of("list", "<C-x>"), "n")
+  eq("input names the action", action_of("input", "<M-g>"), "act_b")
+  eq("list names the action", action_of("list", "<M-g>"), "act_b")
+  eq("every key reaches the input window", count("input"), 2)
+  eq("every key reaches the list window", count("list"), 2)
+
+  -- A missing backend must say what to install rather than indexing nil.
+  _G.Snacks = nil
+  local ok, err = pcall(real_ui.pick, { keys = {} })
+  eq("a missing backend is refused", ok, false)
+  check(
+    "and the message names snacks.nvim",
+    type(err) == "string" and err:find("snacks.nvim is not loaded", 1, true) ~= nil,
+    vim.inspect(err)
+  )
+
+  _G.Snacks = saved_snacks
 end
 
 describe("1. ordinary repository keeps worktree functionality")
@@ -405,15 +503,9 @@ end
 
 describe("7. filters follow the resolved worktree")
 do
-  local pickers_items
-  _G.Snacks.picker.pick = function(opts)
-    opened = opts.title or "picker"
-    pickers_items = opts.items
-  end
-
   ---@return table<string, boolean>
   local function branches_in(filter)
-    pickers_items = nil
+    ui.last_pick = nil
     in_context(TMP .. "/clone", nil, function()
       local cfg = vim.tbl_deep_extend("force", require("git-worktrees").config, {
         branch_type = "all",
@@ -422,7 +514,7 @@ do
       require("git-worktrees.pickers").worktrees(cfg)
     end)
     local present = {}
-    for _, item in ipairs(pickers_items or {}) do
+    for _, item in ipairs((ui.last_pick or {}).items or {}) do
       present[item.branch] = true
     end
     return present
@@ -647,16 +739,6 @@ do
   local fmt = require("git-worktrees.format")
 
   local shown
-  local real_win = _G.Snacks.win
-  _G.Snacks.win = function(opts)
-    shown = opts.text
-    return {
-      win_valid = function()
-        return false
-      end,
-      close = function() end,
-    }
-  end
 
   --- Return the "worktree" line of the <C-o> popup for `branch`, or nil when absent.
   ---@param branch string
@@ -674,8 +756,9 @@ do
     )
     for _, item in ipairs(items) do
       if item.branch == branch then
-        shown = nil
+        ui.last_popup = nil
         act.branch_info(nil, item)
+        shown = (ui.last_popup or {}).text
         for _, line in ipairs(shown or {}) do
           local value = line:match("^worktree%s+:%s+(.+)$")
           if value then
@@ -718,8 +801,6 @@ do
     vim.uv.fs_realpath(TMP .. "/clone-wt-b") .. " (twin-b)"
   )
   git({ "worktree", "add", "-q", TMP .. "/clone-wt-a", "twin-a" }, TMP .. "/clone")
-
-  _G.Snacks.win = real_win
 end
 
 --------------------------------------------------------------------------------
