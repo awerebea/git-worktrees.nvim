@@ -264,19 +264,19 @@ All four are normal-mode mappings.
 
 Active while a picker is open. These are **not** configurable.
 
-| Key                            | Pickers               | Action                                                                                                                                               |
-| ------------------------------ | --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `<CR>`                         | worktree,&nbsp;branch | Switch to worktree / branch (create the worktree if missing); respects `swap_current_buffer` and `switch_file_command`                               |
-| <code>&lt;C&#8209;e&gt;</code> | worktree&nbsp;only    | Switch and open the current file with `edit`, ignoring `switch_file_command`                                                                         |
-| <code>&lt;C&#8209;s&gt;</code> | worktree&nbsp;only    | Switch and open the current file in a horizontal split, ignoring `switch_file_command`                                                               |
-| <code>&lt;C&#8209;v&gt;</code> | worktree&nbsp;only    | Switch and open the current file in a vertical split, ignoring `switch_file_command`                                                                 |
-| <code>&lt;C&#8209;t&gt;</code> | worktree&nbsp;only    | Switch and open the current file in a new tab, ignoring `switch_file_command`                                                                        |
-| <code>&lt;C&#8209;x&gt;</code> | worktree,&nbsp;branch | Simple delete: local branch → delete local only; remote branch → delete remote only                                                                  |
-| <code>&lt;M&#8209;x&gt;</code> | worktree,&nbsp;branch | Extended delete: local → delete local then offer the remote; remote → delete remote then offer the local; worktree pickers remove the worktree first |
-| <code>&lt;M&#8209;v&gt;</code> | worktree&nbsp;only    | Force the path prompt even when `auto_worktree_path = true`                                                                                          |
-| <code>&lt;C&#8209;o&gt;</code> | worktree,&nbsp;branch | Show a branch info popup (branch, worktree, author, dates, `HEAD`&nbsp;commit, message) without closing the picker                                   |
-| <code>&lt;M&#8209;n&gt;</code> | worktree,&nbsp;branch | Fork branch (worktree pickers: create branch + worktree; branch picker: branch only)                                                                 |
-| <code>&lt;M&#8209;g&gt;</code> | worktree,&nbsp;branch | Cycle branch type: local → remote → all → local, to reveal remote-only branches                                                                      |
+| &nbsp;&nbsp;&nbsp;Key&nbsp;&nbsp;&nbsp;&nbsp; | Pickers               | Action                                                                                                                                               |
+| --------------------------------------------- | --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `<CR>`                                        | worktree,&nbsp;branch | Switch to worktree / branch (create the worktree if missing); respects `swap_current_buffer` and `switch_file_command`                               |
+| `<C-e>`                                       | worktree&nbsp;only    | Switch and open the current file with `edit`, ignoring `switch_file_command`                                                                         |
+| `<C-s>`                                       | worktree&nbsp;only    | Switch and open the current file in a horizontal split, ignoring `switch_file_command`                                                               |
+| `<C-v>`                                       | worktree&nbsp;only    | Switch and open the current file in a vertical split, ignoring `switch_file_command`                                                                 |
+| `<C-t>`                                       | worktree&nbsp;only    | Switch and open the current file in a new tab, ignoring `switch_file_command`                                                                        |
+| `<C-x>`                                       | worktree,&nbsp;branch | Simple delete: local branch → delete local only; remote branch → delete remote only                                                                  |
+| `<M-x>`                                       | worktree,&nbsp;branch | Extended delete: local → delete local then offer the remote; remote → delete remote then offer the local; worktree pickers remove the worktree first |
+| `<M-v>`                                       | worktree&nbsp;only    | Force the path prompt even when `auto_worktree_path = true`                                                                                          |
+| `<C-o>`                                       | worktree,&nbsp;branch | Show a branch info popup (branch, worktree, author, dates, `HEAD`&nbsp;commit, message) without closing the picker                                   |
+| `<M-n>`                                       | worktree,&nbsp;branch | Fork branch (worktree pickers: create branch + worktree; branch picker: branch only)                                                                 |
+| `<M-g>`                                       | worktree,&nbsp;branch | Cycle branch type: local → remote → all → local, to reveal remote-only branches                                                                      |
 
 The four file-open overrides (`<C-e>`, `<C-s>`, `<C-v>`, `<C-t>`) always switch to (or
 create) the worktree and then try to open a file, regardless of `swap_current_buffer` -
@@ -298,23 +298,23 @@ and everything after it is skipped; anything already removed stays removed.
 
 Pass any subset of these to `setup()`. Unspecified options keep their defaults.
 
-| Option                   | Type                       | Default                             | Description                                                                                                                       |
-| ------------------------ | -------------------------- | ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| `wt_path_display`        | `string`                   | `"tilde"`                           | How worktree paths are shown in the picker. See [Path display modes](#path-display-modes).                                        |
-| `wt_base_path_bare`      | `string`                   | `"./wt"`                            | Where new worktrees are created in **bare** repos. See [Worktree Base Paths](#worktree-base-paths).                               |
-| `wt_base_path_regular`   | `string`                   | `"./wt"`                            | Where new worktrees are created in **regular** repos. See [Worktree Base Paths](#worktree-base-paths).                            |
-| `auto_worktree_path`     | `boolean`                  | `false`                             | `false` pre-fills the path into an editable prompt; `true` uses `<base_path>/<branch>` without asking.                            |
-| `branch_type`            | `"local"\|"remote"\|"all"` | `"local"`                           | Branch scope a picker opens with. Cycle live with `<M-g>`.                                                                        |
-| `sort_by`                | `string`                   | <code>"&#8209;committerdate"</code> | Sort key passed to `git for-each-ref --sort`. Prefix with `-` for descending.                                                     |
-| `date_format`            | `string`                   | `"relative"`                        | Date column format, used as `committerdate:<value>`. E.g. `"short"`, `"iso"`, <code>"format:%Y&#8209;%m&#8209;%d"</code>.         |
-| `author_format`          | `"name"\|"email"`          | `"name"`                            | Author column source: `committername` or `committeremail`.                                                                        |
-| `swap_current_buffer`    | `boolean\|"ask"`           | `false`                             | On `<CR>`: `false` leaves the buffer, `true` opens the equivalent file in the new worktree, `"ask"` prompts first.                |
-| `switch_file_command`    | `string\|false`            | `"edit"`                            | Vim command used to open that file. `false` or `""` changes cwd only. See the note below.                                         |
-| `enable_default_keymaps` | `boolean`                  | `false`                             | Registers the [built-in keymaps](#default-keymaps) when `setup()` runs. Leave `false` if you define your own mappings.            |
-| `notify_timeout`         | `integer\|nil`             | `nil`                               | Timeout in ms for this plugin's notifications. `nil` lets the notification handler use its own default.                           |
-| `branch_info_timeout`    | `integer`                  | `5000`                              | Timeout in ms for the <code>&lt;C&#8209;o&gt;</code> branch info popup. `0` keeps it until dismissed.                             |
-| `status_win_timeout`     | `integer`                  | `0`                                 | Timeout in ms for the <code>git&nbsp;status</code> popup shown before a force-delete. `0` keeps it until the confirm is answered. |
-| `hooks`                  | `table`                    | `{}`                                | Lifecycle callbacks. See [Hooks](#hooks).                                                                                         |
+| Option                   | Type                       | Default            | Description                                                                                                                       |
+| ------------------------ | -------------------------- | ------------------ | --------------------------------------------------------------------------------------------------------------------------------- |
+| `wt_path_display`        | `string`                   | `"tilde"`          | How worktree paths are shown in the picker. See [Path display modes](#path-display-modes).                                        |
+| `wt_base_path_bare`      | `string`                   | `"./wt"`           | Where new worktrees are created in **bare** repos. See [Worktree Base Paths](#worktree-base-paths).                               |
+| `wt_base_path_regular`   | `string`                   | `"./wt"`           | Where new worktrees are created in **regular** repos. See [Worktree Base Paths](#worktree-base-paths).                            |
+| `auto_worktree_path`     | `boolean`                  | `false`            | `false` pre-fills the path into an editable prompt; `true` uses `<base_path>/<branch>` without asking.                            |
+| `branch_type`            | `"local"\|"remote"\|"all"` | `"local"`          | Branch scope a picker opens with. Cycle live with `<M-g>`.                                                                        |
+| `sort_by`                | `string`                   | `"-committerdate"` | Sort key passed to `git for-each-ref --sort`. Prefix with `-` for descending.                                                     |
+| `date_format`            | `string`                   | `"relative"`       | Date column format, used as `committerdate:<value>`. E.g. `"short"`, `"iso"`, `"format:%Y-%m-%d"`.                                |
+| `author_format`          | `"name"\|"email"`          | `"name"`           | Author column source: `committername` or `committeremail`.                                                                        |
+| `swap_current_buffer`    | `boolean\|"ask"`           | `false`            | On `<CR>`: `false` leaves the buffer, `true` opens the equivalent file in the new worktree, `"ask"` prompts first.                |
+| `switch_file_command`    | `string\|false`            | `"edit"`           | Vim command used to open that file. `false` or `""` changes cwd only. See the note below.                                         |
+| `enable_default_keymaps` | `boolean`                  | `false`            | Registers the [built-in keymaps](#default-keymaps) when `setup()` runs. Leave `false` if you define your own mappings.            |
+| `notify_timeout`         | `integer\|nil`             | `nil`              | Timeout in ms for this plugin's notifications. `nil` lets the notification handler use its own default.                           |
+| `branch_info_timeout`    | `integer`                  | `5000`             | Timeout in ms for the `<C-o>` branch info popup. `0` keeps it until dismissed.                                                    |
+| `status_win_timeout`     | `integer`                  | `0`                | Timeout in ms for the <code>git&nbsp;status</code> popup shown before a force-delete. `0` keeps it until the confirm is answered. |
+| `hooks`                  | `table`                    | `{}`               | Lifecycle callbacks. See [Hooks](#hooks).                                                                                         |
 
 By area: `enable_default_keymaps` is the only option that affects **keymaps**; the user
 commands are always registered and are not configurable. `wt_path_display`,
