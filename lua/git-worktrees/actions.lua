@@ -7,6 +7,7 @@
 ---@field is_remote boolean
 
 local notify = require("git-worktrees.util").notify
+local ui = require("git-worktrees.ui")
 
 local M = {}
 
@@ -79,7 +80,7 @@ end
 
 ---Open the file in `to_path` that corresponds to the currently open buffer in
 ---`from_path`, respecting the `swap_current_buffer` and `switch_file_command`
----config options. Falls back to a Snacks file picker when the equivalent file is
+---config options. Falls back to a file picker when the equivalent file is
 ---absent, there is no current buffer, or the current buffer is outside `from_path`.
 ---
 ---When `cmd_override` is set (the `<C-e>`/`<C-s>`/`<C-v>`/`<C-t>` overrides), the
@@ -98,7 +99,7 @@ local function swap_current_buffer(from_path, to_path, cmd_override)
   end
 
   local function open_picker()
-    Snacks.picker.files({ cwd = to_path })
+    ui.browse_files(to_path)
   end
 
   -- Used when there is a current file but it has no counterpart in the new
@@ -511,33 +512,13 @@ local function show_status_win(wt_path, title)
   end
   local title_w = vim.api.nvim_strwidth(title)
   local win_width = math.min(math.max(max_line + 4, title_w + 6), math.floor(vim.o.columns * 0.85))
-  local has_tabline = vim.o.showtabline == 2 or (vim.o.showtabline == 1 and vim.fn.tabpagenr("$") > 1)
-  local t = config.status_win_timeout ~= nil and config.status_win_timeout or 0
-  local win = Snacks.win({
+  local win = ui.popup({
     text = lines,
     title = title,
-    title_pos = "left",
-    relative = "editor",
-    position = "float",
-    wo = { wrap = true },
     width = win_width,
     height = math.min(wrapped_height(lines, win_width), math.floor(vim.o.lines * 0.5)),
-    row = has_tabline and 1 or 0,
-    col = -1,
-    zindex = 300,
-    enter = false,
-    border = "rounded",
-    noautocmd = true,
-    backdrop = false,
-    keys = { q = "close" },
   })
-  if t > 0 then
-    vim.defer_fn(function()
-      if win:win_valid() then
-        win:close()
-      end
-    end, t)
-  end
+  ui.close_after(win, config.status_win_timeout ~= nil and config.status_win_timeout or 0)
   return win
 end
 
@@ -1106,10 +1087,8 @@ function M.branch_info(picker, item) --luacheck: ignore picker
     end
   end
 
-  -- Use a floating window positioned like a Snacks notification (top-right corner).
-  -- zindex 300 places it above the picker (~52) and the Snacks notifier (100).
-  -- wo.wrap=true ensures long lines wrap rather than being truncated.
-  -- auto-closes after branch_info_timeout ms (0 = stay until dismissed).
+  -- Sized for wrapped lines, since the popup wraps rather than truncating; see ui.popup
+  -- for the geometry. Auto-closes after branch_info_timeout ms (0 = stay until dismissed).
   local max_line = 0
   for _, line in ipairs(lines) do
     local w = vim.api.nvim_strwidth(line)
@@ -1117,32 +1096,13 @@ function M.branch_info(picker, item) --luacheck: ignore picker
       max_line = w
     end
   end
-  local t = config.branch_info_timeout ~= nil and config.branch_info_timeout or 5000
   local win_width = math.min(max_line + 4, math.floor(vim.o.columns * 0.85))
-  local has_tabline = vim.o.showtabline == 2 or (vim.o.showtabline == 1 and vim.fn.tabpagenr("$") > 1)
-  local info_win = Snacks.win({
+  local info_win = ui.popup({
     text = lines,
-    relative = "editor",
-    position = "float",
-    wo = { wrap = true },
     width = win_width,
     height = math.min(wrapped_height(lines, win_width), math.floor(vim.o.lines * 0.5)),
-    row = has_tabline and 1 or 0,
-    col = -1,
-    zindex = 300,
-    enter = false,
-    border = "rounded",
-    noautocmd = true,
-    backdrop = false,
-    keys = { q = "close" },
   })
-  if t > 0 then
-    vim.defer_fn(function()
-      if info_win:win_valid() then
-        info_win:close()
-      end
-    end, t)
-  end
+  ui.close_after(info_win, config.branch_info_timeout ~= nil and config.branch_info_timeout or 5000)
 end
 
 return M

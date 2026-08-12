@@ -11,6 +11,7 @@
 ---@field show_date boolean Show the date column.
 
 local notify = require("git-worktrees.util").notify
+local ui = require("git-worktrees.ui")
 
 local M = {}
 
@@ -284,10 +285,9 @@ function M.worktrees(config)
     title = "Manage Worktrees [" .. active_branch_type .. "]"
   end
 
-  Snacks.picker.pick({
+  ui.pick({
     title = title,
     items = items,
-    layout = { preview = false },
     pattern = config._initial_pattern,
     format = function(item, picker)
       if not layout then
@@ -296,7 +296,7 @@ function M.worktrees(config)
         layout = compute_layout(items, win_w, true)
       end
 
-      local a = Snacks.picker.util.align
+      local a = ui.align
       local sp = string.rep(" ", layout.spacer)
       ---@type snacks.picker.Highlight[]
       local ret = {}
@@ -368,7 +368,7 @@ function M.worktrees(config)
         act.worktree_fork(p, it)
       end,
       cycle_branch_type = function(p, _)
-        local q = (p.input and p.input.filter and p.input.filter.pattern) or ""
+        local q = ui.query(p)
         local next_bt = next_branch_type(active_branch_type)
         p:close()
         vim.schedule(function()
@@ -380,35 +380,17 @@ function M.worktrees(config)
       end,
     },
     confirm = "worktree_switch",
-    win = {
-      input = {
-        keys = {
-          ["<C-x>"] = { "worktree_delete", mode = { "i", "n" } },
-          ["<M-x>"] = { "worktree_delete_extended", mode = { "i", "n" } },
-          ["<C-o>"] = { "branch_info", mode = { "i", "n" } },
-          ["<M-v>"] = { "worktree_switch_verbose", mode = { "i", "n" } },
-          ["<M-n>"] = { "worktree_fork", mode = { "i", "n" } },
-          ["<M-g>"] = { "cycle_branch_type", mode = { "i", "n" } },
-          ["<C-e>"] = { "worktree_switch_edit", mode = { "i", "n" } },
-          ["<C-t>"] = { "worktree_switch_tabedit", mode = { "i", "n" } },
-          ["<C-v>"] = { "worktree_switch_vsplit", mode = { "i", "n" } },
-          ["<C-s>"] = { "worktree_switch_split", mode = { "i", "n" } },
-        },
-      },
-      list = {
-        keys = {
-          ["<C-x>"] = { "worktree_delete", mode = { "n" } },
-          ["<M-x>"] = { "worktree_delete_extended", mode = { "n" } },
-          ["<C-o>"] = { "branch_info", mode = { "n" } },
-          ["<M-v>"] = { "worktree_switch_verbose", mode = { "n" } },
-          ["<M-n>"] = { "worktree_fork", mode = { "n" } },
-          ["<M-g>"] = { "cycle_branch_type", mode = { "n" } },
-          ["<C-e>"] = { "worktree_switch_edit", mode = { "n" } },
-          ["<C-t>"] = { "worktree_switch_tabedit", mode = { "n" } },
-          ["<C-v>"] = { "worktree_switch_vsplit", mode = { "n" } },
-          ["<C-s>"] = { "worktree_switch_split", mode = { "n" } },
-        },
-      },
+    keys = {
+      ["<C-x>"] = "worktree_delete",
+      ["<M-x>"] = "worktree_delete_extended",
+      ["<C-o>"] = "branch_info",
+      ["<M-v>"] = "worktree_switch_verbose",
+      ["<M-n>"] = "worktree_fork",
+      ["<M-g>"] = "cycle_branch_type",
+      ["<C-e>"] = "worktree_switch_edit",
+      ["<C-t>"] = "worktree_switch_tabedit",
+      ["<C-v>"] = "worktree_switch_vsplit",
+      ["<C-s>"] = "worktree_switch_split",
     },
   })
 end
@@ -431,10 +413,9 @@ function M.branches(config)
   ---@type GitWorktrees.Layout|nil
   local layout = nil
 
-  Snacks.picker.pick({
+  ui.pick({
     title = "Git Branches [" .. active_branch_type .. "]",
     items = items,
-    layout = { preview = false },
     pattern = config._initial_pattern,
     format = function(item, picker)
       if not layout then
@@ -443,7 +424,7 @@ function M.branches(config)
         layout = compute_layout(items, win_w, false)
       end
 
-      local a = Snacks.picker.util.align
+      local a = ui.align
       local sp = string.rep(" ", layout.spacer)
       ---@type snacks.picker.Highlight[]
       local ret = {}
@@ -488,7 +469,7 @@ function M.branches(config)
         act.branch_fork(p, it)
       end,
       cycle_branch_type = function(p, _)
-        local q = (p.input and p.input.filter and p.input.filter.pattern) or ""
+        local q = ui.query(p)
         local next_bt = next_branch_type(active_branch_type)
         p:close()
         vim.schedule(function()
@@ -500,25 +481,12 @@ function M.branches(config)
       end,
     },
     confirm = "branch_switch",
-    win = {
-      input = {
-        keys = {
-          ["<C-x>"] = { "branch_delete", mode = { "i", "n" } },
-          ["<M-x>"] = { "branch_delete_extended", mode = { "i", "n" } },
-          ["<C-o>"] = { "branch_info", mode = { "i", "n" } },
-          ["<M-n>"] = { "branch_fork", mode = { "i", "n" } },
-          ["<M-g>"] = { "cycle_branch_type", mode = { "i", "n" } },
-        },
-      },
-      list = {
-        keys = {
-          ["<C-x>"] = { "branch_delete", mode = { "n" } },
-          ["<M-x>"] = { "branch_delete_extended", mode = { "n" } },
-          ["<C-o>"] = { "branch_info", mode = { "n" } },
-          ["<M-n>"] = { "branch_fork", mode = { "n" } },
-          ["<M-g>"] = { "cycle_branch_type", mode = { "n" } },
-        },
-      },
+    keys = {
+      ["<C-x>"] = "branch_delete",
+      ["<M-x>"] = "branch_delete_extended",
+      ["<C-o>"] = "branch_info",
+      ["<M-n>"] = "branch_fork",
+      ["<M-g>"] = "cycle_branch_type",
     },
   })
 end
